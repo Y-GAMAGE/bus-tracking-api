@@ -5,7 +5,7 @@ Real-Time Bus Tracking System for Inter-Provincial Services
 ## Student Information
 **Student ID:** COBSCCOMP241P-004  
 **Module:** NB6007CEM - Web API Development  
-Batch: 24.1P  
+Batch: 24.1P  computing
 
 ---
 
@@ -17,10 +17,10 @@ A RESTful API for tracking inter-provincial buses across Sri Lanka in real-time.
 
 ## Technology Stack
 
-- **Runtime:** Node.js (v16+)
-- **Framework:** Express.js
-- **Authentication:** JWT
-- **Deployment:** [Render/Railway/Heroku - you'll add this later]
+- Node.js 
+- Framework
+- Authentication: JWT
+- Deployment:
 
 ---
 
