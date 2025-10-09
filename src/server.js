@@ -30,6 +30,7 @@ app.get('/', (req, res) => {
     database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
     endpoints: {
       auth: '/api/auth',
+      buses: '/api/buses',
       health: '/health'
     }
   });
@@ -57,8 +58,10 @@ app.get('/health', (req, res) => {
 // Auth routes
 app.use('/api/auth', require('./routes/authRoutes'));
 
+// Bus routes
+app.use('/api/buses', require('./routes/busRoutes'));
+
 // TODO: Add other routes here as you create them
-// app.use('/api/buses', require('./routes/busRoutes'));
 // app.use('/api/routes', require('./routes/routeRoutes'));
 // app.use('/api/trips', require('./routes/tripRoutes'));
 // app.use('/api/locations', require('./routes/locationRoutes'));
@@ -88,6 +91,7 @@ const server = app.listen(PORT, () => {
   console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
   console.log('========================================');
   console.log('📋 Available endpoints:');
+  console.log('   🔐 AUTH ENDPOINTS:');
   console.log(`   - GET  /`);
   console.log(`   - GET  /health`);
   console.log(`   - POST /api/auth/register`);
@@ -99,6 +103,17 @@ const server = app.listen(PORT, () => {
   console.log(`   - POST /api/auth/forgot-password`);
   console.log(`   - POST /api/auth/reset-password`);
   console.log(`   - GET  /api/auth/verify`);
+  console.log('');
+  console.log('   🚌 BUS ENDPOINTS:');
+  console.log(`   - GET  /api/buses`);
+  console.log(`   - GET  /api/buses/:id`);
+  console.log(`   - POST /api/buses`);
+  console.log(`   - PUT  /api/buses/:id`);
+  console.log(`   - DELETE /api/buses/:id`);
+  console.log(`   - GET  /api/buses/route/:routeId`);
+  console.log(`   - GET  /api/buses/status/:status`);
+  console.log(`   - PUT  /api/buses/:id/location`);
+  console.log(`   - PUT  /api/buses/:id/assign-driver`);
   console.log('========================================');
 });
 
