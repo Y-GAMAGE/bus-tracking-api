@@ -4,11 +4,24 @@ const User = require('../models/User');
 /**
  * Generate JWT Token
  */
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '24h'
-  });
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user._id,        // User's database ID
+      role: user.role,     // User's role (admin, driver, passenger)
+      email: user.email    // Optional: include email for easier debugging
+    }, 
+    process.env.JWT_SECRET, 
+    {
+      expiresIn: process.env.JWT_EXPIRE || '30d'
+    }
+  );
 };
+// const generateToken = (id) => {
+//   return jwt.sign({ id }, process.env.JWT_SECRET, {
+//     expiresIn: process.env.JWT_EXPIRE || '24h'
+//   });
+// };
 
 /**
  * @desc    Register a new user
