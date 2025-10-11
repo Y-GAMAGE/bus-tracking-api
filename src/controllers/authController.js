@@ -30,7 +30,7 @@ const generateToken = (user) => {
  */
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role, phone, profile, driverDetails } = req.body;
+    const { username, email, password, role, phone, profile, driverDetails, operatorDetails } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -46,6 +46,8 @@ exports.register = async (req, res) => {
       });
     }
 
+   
+
     // Prepare user data
     const userData = {
       username,
@@ -56,15 +58,34 @@ exports.register = async (req, res) => {
       profile
     };
 
-    // Add driverDetails if role is driver
-    if (role === 'driver' && driverDetails) {
+    // // Add role-specific details
+    // if (role === 'driver' && driverDetails) {
+    //   userData.driverDetails = {
+    //     licenseNumber: driverDetails.licenseNumber,
+    //     licenseExpiry: driverDetails.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
+    //     experienceYears: driverDetails.experienceYears || 0,
+    //     emergencyContact: driverDetails.emergencyContact || '',
+    //     medicalCertificateExpiry: driverDetails.medicalCertificateExpiry
+    //   };
+    // }
+
+    // if (role === 'operator' && operatorDetails) {
+    //   userData.operatorDetails = {
+    //     companyName: operatorDetails.companyName,
+    //     businessLicense: operatorDetails.businessLicense,
+    //     contactPerson: operatorDetails.contactPerson || '',
+    //     businessAddress: operatorDetails.businessAddress || ''
+    //   };
+    // }
+
+    // Add optional details if provided
+    if (driverDetails) {
       userData.driverDetails = driverDetails;
     }
 
-    if (role === 'operator' && operatorDetails) {
+    if (operatorDetails) {
       userData.operatorDetails = operatorDetails;
     }
-
     // Create user
     const user = await User.create(userData);
 
@@ -76,7 +97,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: `${role || 'User'} registered successfully`,
       data: {
         user,
         token
@@ -90,7 +111,6 @@ exports.register = async (req, res) => {
     });
   }
 };
-
 /**
  * @desc    Login user
  * @route   POST /api/auth/login
@@ -171,7 +191,7 @@ exports.login = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     // req.user is set by auth middleware
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({
@@ -219,7 +239,7 @@ exports.updateProfile = async (req, res) => {
     });
 
     const user = await User.findByIdAndUpdate(
-      req.user._id,
+      req.user.id,
       updates,
       {
         new: true,
@@ -274,7 +294,7 @@ exports.changePassword = async (req, res) => {
     }
 
     // Get user with password
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user.id).select('+password');
 
     // Check current password
     const isPasswordMatch = await user.comparePassword(currentPassword);
@@ -446,8 +466,9 @@ exports.verifyToken = async (req, res) => {
       success: true,
       message: 'Token is valid',
       data: {
-        userId: req.user._id,
+        userId: req.user.id,
         role: req.user.role,
+        email: req.user.email,
         username: req.user.username
       }
     });
