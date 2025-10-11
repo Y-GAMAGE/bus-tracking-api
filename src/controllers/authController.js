@@ -30,7 +30,7 @@ const generateToken = (user) => {
  */
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role, phone, profile } = req.body;
+    const { username, email, password, role, phone, profile, driverDetails } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -46,18 +46,30 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Create user
-    const user = await User.create({
+    // Prepare user data
+    const userData = {
       username,
       email,
       password,
-      role: role || 'passenger', // Default to passenger if not specified
+      role: role || 'passenger',
       phone,
       profile
-    });
+    };
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Add driverDetails if role is driver
+    if (role === 'driver' && driverDetails) {
+      userData.driverDetails = driverDetails;
+    }
+
+    if (role === 'operator' && operatorDetails) {
+      userData.operatorDetails = operatorDetails;
+    }
+
+    // Create user
+    const user = await User.create(userData);
+
+    // Generate token - FIX: Pass user object, not just ID
+    const token = generateToken(user);
 
     // Remove password from response
     user.password = undefined;
@@ -128,8 +140,8 @@ exports.login = async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token - FIX: Pass user object, not just ID
+    const token = generateToken(user);
 
     // Remove password from response
     user.password = undefined;
@@ -189,6 +201,14 @@ exports.getMe = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const allowedUpdates = ['username', 'phone', 'profile'];
+    // Add role-specific allowed updates
+    if (req.user.role === 'driver') {
+      allowedUpdates.push('driverDetails');
+    }
+    if (req.user.role === 'operator') {
+      allowedUpdates.push('operatorDetails');
+    }
+
     const updates = {};
 
     // Only allow certain fields to be updated
