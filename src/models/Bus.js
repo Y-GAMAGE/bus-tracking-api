@@ -37,6 +37,11 @@ const busSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'maintenance', 'en-route', 'at-stop', 'breakdown'],
     default: 'inactive'
   },
+
+  permitNumber: {
+    type: String,
+    required: [true, 'Permit number is required']
+  },
   currentLocation: {
     type: {
       type: String,
@@ -54,21 +59,18 @@ const busSchema = new mongoose.Schema({
     default: null
   },
   driver: {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    name: String,
-    contactNumber: String,
+   
+    username: String,
+    phone: String,
     licenseNumber: String
   },
   operator: {
-    name: {
+    username: {
       type: String,
       required: true
     },
-    contactNumber: String,
-    permitNumber: String
+    phone: String
+    
   },
   amenities: [{
     type: String,

@@ -45,8 +45,9 @@ const userSchema = new mongoose.Schema({
   
   // SIMPLIFIED operator details (optional)
   operatorDetails: {
-    companyName: String,
+    
     businessLicense: String
+  
   },
   
   // SIMPLIFIED driver details (optional)
