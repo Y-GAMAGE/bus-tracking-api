@@ -1,7 +1,7 @@
 const Bus = require('../models/Bus');
-const Route = require('../models/Route');
+const Route = require('../models/route');
 const asyncHandler = require('express-async-handler');
-const User = require('../models/User');
+const User = require('../models/user');
 
 /**
  * @desc    Get all buses with pagination, filtering, and sorting
