@@ -32,6 +32,7 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       buses: '/api/buses',
       routes: '/api/routes',
+      locations: '/api/locations',
       health: '/health'
     }
   });
@@ -65,9 +66,11 @@ app.use('/api/buses', require('./routes/busRoutes'));
 // Route routes
 app.use('/api/routes', require('./routes/routeRoutes'));
 
+// Location routes
+app.use('/api/locations', require('./routes/locationRoutes'));
+
 // TODO: Add other routes here as you create them
 // app.use('/api/trips', require('./routes/tripRoutes'));
-// app.use('/api/locations', require('./routes/locationRoutes'));
 
 // ========================================
 // ERROR HANDLING MIDDLEWARE (Must be last)
@@ -124,15 +127,25 @@ const server = app.listen(PORT, () => {
   console.log('   🛣️  ROUTE ENDPOINTS:');
   console.log(`   - GET  /api/routes           (Get All Routes)`);
   console.log(`   - GET  /api/routes/:id       (Get Single Route)`);
-  console.log(`   - POST /api/routes           (Create Route)`);
-  console.log(`   - PUT  /api/routes/:id       (Update Route)`);
-  console.log(`   - DELETE /api/routes/:id     (Delete Route)`);
-  console.log(`   - GET  /api/routes/search    (Search Routes)`);
   console.log(`   - GET  /api/routes/route/:routeId (Get Route by RouteID)`);
+  console.log(`   - POST /api/routes           (Create Route)`);
+  console.log(`   - PUT  /api/routes/route/:routeId (Update Route)`);
+  console.log(`   - DELETE /api/routes/route/:routeId (Delete Route)`);
+  console.log(`   - GET  /api/routes/search    (Search Routes)`);
+  console.log('');
+  console.log('   📍 LOCATION ENDPOINTS:');
+  console.log(`   - GET  /api/locations        (Get All Location Records)`);
+  console.log(`   - GET  /api/locations/:id    (Get Single Location Record)`);
+  console.log(`   - GET  /api/locations/nearby (Get Nearby Buses)`);
+  console.log(`   - GET  /api/locations/bus/:busId/current (Get Current Bus Location)`);
+  console.log(`   - GET  /api/locations/bus/:busId/recent (Get Recent Bus Locations)`);
+  console.log(`   - GET  /api/locations/bus/:busId/history (Get Bus Location History)`);
+  console.log(`   - POST /api/locations        (Create Location Record)`);
+  console.log(`   - PUT  /api/locations/:id    (Update Location Record)`);
+  console.log(`   - DELETE /api/locations/:id  (Delete Location Record)`);
   console.log('');
   console.log('   📍 COMING SOON:');
   console.log(`   - /api/trips                 (Trip Management)`);
-  console.log(`   - /api/locations             (Location Tracking)`);
   console.log('========================================');
 });
 

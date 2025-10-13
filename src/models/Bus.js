@@ -1,5 +1,3 @@
-const mongoose = require('mongoose');
-
 const busSchema = new mongoose.Schema({
   busNumber: {
     type: String,
@@ -12,107 +10,40 @@ const busSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Registration number is required'],
     unique: true,
-    uppercase: true,
-    match: [/^[A-Z]{2,3}-[0-9]{4}$/, 'Invalid registration format (e.g., WP-1234)']
+    uppercase: true
   },
-  routeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Route',
-    required: [true, 'Route is required']
+  
+  // ✅ SIMPLE & PRACTICAL - Just store route name directly
+  routeName: {
+    type: String,
+    required: [true, 'Route name is required'],
+    trim: true
+    // Examples: "Colombo - Kandy", "Colombo - Galle", "Kandy - Jaffna"
   },
+  
   capacity: {
     type: Number,
     required: true,
-    min: [20, 'Capacity must be at least 20'],
-    max: [60, 'Capacity cannot exceed 60']
+    min: [20, 'Capacity must be at least 20']
   },
+  
   type: {
     type: String,
-    enum: ['express', 'semi-express', 'normal', 'luxury', 'super-luxury'],
-    default: 'normal',
-    required: true
+    enum: ['normal', 'semi-luxury', 'luxury', 'super-luxury'],
+    default: 'normal'
   },
+  
   status: {
     type: String,
-    enum: ['active', 'inactive', 'maintenance', 'en-route', 'at-stop', 'breakdown'],
-    default: 'inactive'
+    enum: ['active', 'inactive', 'maintenance', 'en-route', 'at-stop'],
+    default: 'active'
   },
 
-  permitNumber: {
-    type: String,
-    required: [true, 'Permit number is required']
-  },
-  currentLocation: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      default: [79.8612, 6.9271] // Default to Colombo
-    }
-  },
-  currentTrip: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Trip',
-    default: null
-  },
-  driver: {
-   
-    username: String,
-    phone: String,
-    licenseNumber: String
-  },
-  operator: {
-    username: {
-      type: String,
-      required: true
-    },
-    phone: String
-    
-  },
-  amenities: [{
-    type: String,
-    enum: ['ac', 'wifi', 'charging-ports', 'reclining-seats', 'restroom', 'entertainment', 'gps']
-  }],
-  specifications: {
-    manufacturer: String,
-    model: String,
-    yearOfManufacture: Number,
-    fuelType: {
-      type: String,
-      enum: ['diesel', 'petrol', 'electric', 'hybrid']
-    },
-    color: String
-  },
-  maintenance: {
-    lastService: Date,
-    nextServiceDue: Date,
-    lastInspection: Date,
-    nextInspectionDue: Date,
-    fitnessExpiry: Date
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  }
+  // ...rest of your fields
 }, {
   timestamps: true
 });
 
-// Geospatial index for location-based queries
-busSchema.index({ currentLocation: '2dsphere' });
-
-// Compound indexes for common queries
-busSchema.index({ busNumber: 1 });
-busSchema.index({ registrationNumber: 1 });
-busSchema.index({ status: 1, routeId: 1 });
-busSchema.index({ routeId: 1, status: 1 });
-
-// Virtual for full bus identifier
-busSchema.virtual('fullIdentifier').get(function() {
-  return `${this.busNumber} (${this.registrationNumber})`;
-});
-
-module.exports = mongoose.model('Bus', busSchema);
+// ✅ Index for route name queries
+busSchema.index({ routeName: 1 });
+busSchema.index({ routeName: 1, status: 1 });

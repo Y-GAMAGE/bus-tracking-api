@@ -1,5 +1,9 @@
 const Route = require('../models/route');
 const asyncHandler = require('express-async-handler');
+// ✅ Safe Bus model getter
+const getBus = () => {
+  return mongoose.models.Bus || require('../models/Bus');
+};
 
 /**
  * @desc    Get all routes with pagination, filtering, and sorting
@@ -289,7 +293,7 @@ const deleteRoute = asyncHandler(async (req, res) => {
     }
 
     // Check if route is being used by buses
-    const Bus = require('../models/Bus');
+    const Bus = getBus();
     const busesUsingRoute = await Bus.countDocuments({ routeId: req.params.id });
     
     if (busesUsingRoute > 0) {

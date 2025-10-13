@@ -1,4 +1,6 @@
-const Bus = require('../models/Bus');
+// const Bus = require('../models/Bus');
+const mongoose = require('mongoose');
+const Bus = mongoose.models.Bus || require('../models/Bus');
 const Route = require('../models/route');
 const asyncHandler = require('express-async-handler');
 const User = require('../models/user');
