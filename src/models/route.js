@@ -1,26 +1,10 @@
 const mongoose = require('mongoose');
 
-const coordinatesSchema = new mongoose.Schema({
-  lat: {
-    type: Number,
-    required: true,
-    min: -90,
-    max: 90
-  },
-  lng: {
-    type: Number,
-    required: true,
-    min: -180,
-    max: 180
-  }
-}, { _id: false });
-
 const stopSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true
   },
-  coordinates: coordinatesSchema,
   sequence: {
     type: Number,
     required: true
@@ -55,10 +39,6 @@ const routeSchema = new mongoose.Schema({
     terminal: {
       type: String,
       required: true
-    },
-    coordinates: {
-      type: coordinatesSchema,
-      required: true
     }
   },
   destination: {
@@ -68,10 +48,6 @@ const routeSchema = new mongoose.Schema({
     },
     terminal: {
       type: String,
-      required: true
-    },
-    coordinates: {
-      type: coordinatesSchema,
       required: true
     }
   },

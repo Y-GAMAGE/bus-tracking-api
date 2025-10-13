@@ -31,6 +31,7 @@ app.get('/', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       buses: '/api/buses',
+      routes: '/api/routes',
       health: '/health'
     }
   });
@@ -61,8 +62,10 @@ app.use('/api/auth', require('./routes/authRoutes'));
 // Bus routes
 app.use('/api/buses', require('./routes/busRoutes'));
 
+// Route routes
+app.use('/api/routes', require('./routes/routeRoutes'));
+
 // TODO: Add other routes here as you create them
-// app.use('/api/routes', require('./routes/routeRoutes'));
 // app.use('/api/trips', require('./routes/tripRoutes'));
 // app.use('/api/locations', require('./routes/locationRoutes'));
 
@@ -91,29 +94,45 @@ const server = app.listen(PORT, () => {
   console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
   console.log('========================================');
   console.log('📋 Available endpoints:');
+  console.log('');
+  console.log('   🏠 GENERAL ENDPOINTS:');
+  console.log(`   - GET  /                     (API Info)`);
+  console.log(`   - GET  /health               (Health Check)`);
+  console.log('');
   console.log('   🔐 AUTH ENDPOINTS:');
-  console.log(`   - GET  /`);
-  console.log(`   - GET  /health`);
-  console.log(`   - POST /api/auth/register`);
-  console.log(`   - POST /api/auth/login`);
-  console.log(`   - GET  /api/auth/me`);
-  console.log(`   - PUT  /api/auth/profile`);
-  console.log(`   - PUT  /api/auth/change-password`);
-  console.log(`   - POST /api/auth/logout`);
-  console.log(`   - POST /api/auth/forgot-password`);
-  console.log(`   - POST /api/auth/reset-password`);
-  console.log(`   - GET  /api/auth/verify`);
+  console.log(`   - POST /api/auth/register    (User Registration)`);
+  console.log(`   - POST /api/auth/login       (User Login)`);
+  console.log(`   - GET  /api/auth/me          (Get Profile)`);
+  console.log(`   - PUT  /api/auth/profile     (Update Profile)`);
+  console.log(`   - PUT  /api/auth/change-password (Change Password)`);
+  console.log(`   - POST /api/auth/logout      (User Logout)`);
+  console.log(`   - POST /api/auth/forgot-password (Forgot Password)`);
+  console.log(`   - POST /api/auth/reset-password (Reset Password)`);
+  console.log(`   - GET  /api/auth/verify      (Verify Token)`);
   console.log('');
   console.log('   🚌 BUS ENDPOINTS:');
-  console.log(`   - GET  /api/buses`);
-  console.log(`   - GET  /api/buses/:id`);
-  console.log(`   - POST /api/buses`);
-  console.log(`   - PUT  /api/buses/:id`);
-  console.log(`   - DELETE /api/buses/:id`);
-  console.log(`   - GET  /api/buses/route/:routeId`);
-  console.log(`   - GET  /api/buses/status/:status`);
-  console.log(`   - PUT  /api/buses/:id/location`);
-  console.log(`   - PUT  /api/buses/:id/assign-driver`);
+  console.log(`   - GET  /api/buses            (Get All Buses)`);
+  console.log(`   - GET  /api/buses/:id        (Get Single Bus)`);
+  console.log(`   - POST /api/buses            (Create Bus)`);
+  console.log(`   - PUT  /api/buses/:id        (Update Bus)`);
+  console.log(`   - DELETE /api/buses/:id      (Delete Bus)`);
+  console.log(`   - GET  /api/buses/route/:routeId (Get Buses by Route)`);
+  console.log(`   - GET  /api/buses/status/:status (Get Buses by Status)`);
+  console.log(`   - PUT  /api/buses/:id/location (Update Bus Location - Place Name Only)`);
+  console.log(`   - PUT  /api/buses/:id/assign-driver (Assign Driver)`);
+  console.log('');
+  console.log('   🛣️  ROUTE ENDPOINTS:');
+  console.log(`   - GET  /api/routes           (Get All Routes)`);
+  console.log(`   - GET  /api/routes/:id       (Get Single Route)`);
+  console.log(`   - POST /api/routes           (Create Route)`);
+  console.log(`   - PUT  /api/routes/:id       (Update Route)`);
+  console.log(`   - DELETE /api/routes/:id     (Delete Route)`);
+  console.log(`   - GET  /api/routes/search    (Search Routes)`);
+  console.log(`   - GET  /api/routes/route/:routeId (Get Route by RouteID)`);
+  console.log('');
+  console.log('   📍 COMING SOON:');
+  console.log(`   - /api/trips                 (Trip Management)`);
+  console.log(`   - /api/locations             (Location Tracking)`);
   console.log('========================================');
 });
 
