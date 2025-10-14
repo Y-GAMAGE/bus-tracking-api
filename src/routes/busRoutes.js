@@ -1,98 +1,38 @@
 const express = require('express');
+const router = express.Router();
 const {
   getAllBuses,
-  getBusById,
+  getBusByRegistrationNumber,
   createBus,
-  updateBus,
-  deleteBus,
-  getBusesByRoute,
-  getBusesByStatus,
-  updateBusLocation,
-  assignDriver
+  updateBusByRegistrationNumber,
+  deleteBusByRegistrationNumber
 } = require('../controllers/busController');
 
-// Import middleware
-const { protect } = require('../middleware/auth');
-const { authorize } = require('../middleware/authorize');
-const { validateBus, validateBusUpdate, validateLocation, validateDriverAssignment } = require('../middleware/validation');
-
-const router = express.Router();
-
-/**
- * PUBLIC ROUTES
- */
+const { protect, authorize } = require('../middleware/auth');
 
 // @route   GET /api/buses
-// @desc    Get all buses with filtering, sorting, pagination
+// @desc    Get all buses with pagination and filtering
 // @access  Public
 router.get('/', getAllBuses);
 
-// @route   GET /api/buses/route/:routeId
-// @desc    Get buses by route ID
+// @route   GET /api/buses/:registrationNumber
+// @desc    Get single bus by registration number (e.g., WP-1234)
 // @access  Public
-router.get('/route/:routeId', getBusesByRoute);
-
-// @route   GET /api/buses/status/:status
-// @desc    Get buses by status
-// @access  Public
-router.get('/status/:status', getBusesByStatus);
-
-// @route   GET /api/buses/:id
-// @desc    Get single bus by ID
-// @access  Public
-router.get('/:id', getBusById);
-
-/**
- * PROTECTED ROUTES
- */
+router.get('/:registrationNumber', getBusByRegistrationNumber);
 
 // @route   POST /api/buses
 // @desc    Create new bus
 // @access  Protected (Admin/Operator only)
-router.post('/', 
-  protect, 
-  authorize('admin', 'operator'), 
-  validateBus,
-  createBus
-);
+router.post('/', protect, authorize('admin', 'operator'), createBus);
 
-// @route   PUT /api/buses/:id
-// @desc    Update bus
+// @route   PUT /api/buses/:registrationNumber
+// @desc    Update bus by registration number
 // @access  Protected (Admin/Operator only)
-router.put('/:id', 
-  protect, 
-  authorize('admin', 'operator'), 
-  validateBusUpdate,
-  updateBus
-);
+router.put('/:registrationNumber', protect, authorize('admin', 'operator'), updateBusByRegistrationNumber);
 
-// @route   DELETE /api/buses/:id
-// @desc    Delete bus (soft delete)
+// @route   DELETE /api/buses/:registrationNumber
+// @desc    Delete bus by registration number (soft delete)
 // @access  Protected (Admin only)
-router.delete('/:id', 
-  protect, 
-  authorize('admin'), 
-  deleteBus
-);
-
-// @route   PUT /api/buses/:id/location
-// @desc    Update bus location
-// @access  Protected (Driver/Admin only)
-router.put('/:id/location', 
-  protect, 
-  authorize('admin', 'driver'), 
-  validateLocation,
-  updateBusLocation
-);
-
-// @route   PUT /api/buses/:id/assign-driver
-// @desc    Assign driver to bus
-// @access  Protected (Operator/Admin only)
-router.put('/:id/assign-driver', 
-  protect, 
-  authorize('admin', 'operator'), 
-  validateDriverAssignment,
-  assignDriver
-);
+router.delete('/:registrationNumber', protect, authorize('admin'), deleteBusByRegistrationNumber);
 
 module.exports = router;

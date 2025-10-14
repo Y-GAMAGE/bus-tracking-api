@@ -1,49 +1,77 @@
+const mongoose = require('mongoose');
+
 const busSchema = new mongoose.Schema({
-  busNumber: {
-    type: String,
-    required: [true, 'Bus number is required'],
-    unique: true,
-    trim: true,
-    uppercase: true
-  },
   registrationNumber: {
     type: String,
     required: [true, 'Registration number is required'],
     unique: true,
-    uppercase: true
+    uppercase: true,
+    match: [/^[A-Z]{2,3}-[0-9]{4}$/, 'Invalid registration format (e.g., WP-1234)']
   },
-  
-  // ✅ SIMPLE & PRACTICAL - Just store route name directly
-  routeName: {
-    type: String,
-    required: [true, 'Route name is required'],
-    trim: true
-    // Examples: "Colombo - Kandy", "Colombo - Galle", "Kandy - Jaffna"
-  },
-  
+
   capacity: {
     type: Number,
     required: true,
-    min: [20, 'Capacity must be at least 20']
-  },
-  
-  type: {
-    type: String,
-    enum: ['normal', 'semi-luxury', 'luxury', 'super-luxury'],
-    default: 'normal'
-  },
-  
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'maintenance', 'en-route', 'at-stop'],
-    default: 'active'
+    min: [20, 'Capacity must be at least 20'],
+    max: [60, 'Capacity cannot exceed 60']
   },
 
-  // ...rest of your fields
+  // ✅ FIXED - Default value matches enum
+  type: {
+    type: String,
+    enum: ['AC', 'Private', 'CTB'],
+    default: 'CTB',  // ✅ Changed to valid enum value
+    required: true
+  },
+
+  permitNumber: {
+    type: String,
+    required: [true, 'Permit number is required']
+  },
+
+
+
+  operator: {
+    username: {
+      type: String,
+      required: [true, 'Operator username is required']  
+    },
+    phone: String
+  },
+
+  amenities: [{
+    type: String,
+    enum: ['ac', 'wifi', 'charging-ports', 'reclining-seats', 'restroom', 'entertainment', 'gps']
+  }],
+
+  specifications: {
+    manufacturer: String,
+    model: String,
+    yearOfManufacture: Number,
+    fuelType: {
+      type: String,
+      enum: ['diesel', 'petrol', 'electric', 'hybrid']
+    },
+    color: String
+  },
+
+  isActive: {
+    type: Boolean,
+    default: true
+  }
 }, {
   timestamps: true
 });
 
-// ✅ Index for route name queries
-busSchema.index({ routeName: 1 });
-busSchema.index({ routeName: 1, status: 1 });
+
+// Compound indexes for common queries
+busSchema.index({ registrationNumber: 1 });
+busSchema.index({ type: 1, isActive: 1 });
+busSchema.index({ 'operator.username': 1 });
+
+
+busSchema.virtual('fullIdentifier').get(function() {
+  return `${this.registrationNumber}`;
+});
+
+module.exports = mongoose.model('Bus', busSchema);

@@ -113,16 +113,12 @@ const server = app.listen(PORT, () => {
   console.log(`   - POST /api/auth/reset-password (Reset Password)`);
   console.log(`   - GET  /api/auth/verify      (Verify Token)`);
   console.log('');
-  console.log('   🚌 BUS ENDPOINTS:');
-  console.log(`   - GET  /api/buses            (Get All Buses)`);
-  console.log(`   - GET  /api/buses/:id        (Get Single Bus)`);
-  console.log(`   - POST /api/buses            (Create Bus)`);
-  console.log(`   - PUT  /api/buses/:id        (Update Bus)`);
-  console.log(`   - DELETE /api/buses/:id      (Delete Bus)`);
-  console.log(`   - GET  /api/buses/route/:routeId (Get Buses by Route)`);
-  console.log(`   - GET  /api/buses/status/:status (Get Buses by Status)`);
-  console.log(`   - PUT  /api/buses/:id/location (Update Bus Location - Place Name Only)`);
-  console.log(`   - PUT  /api/buses/:id/assign-driver (Assign Driver)`);
+console.log('   🚌 BUS ENDPOINTS (PRACTICAL):');
+  console.log(`   - GET  /api/buses                      (Get All Buses)`);
+  console.log(`   - GET  /api/buses/:registrationNumber  (Get Bus - e.g., WP-1234)`);
+  console.log(`   - POST /api/buses                      (Create Bus) [Admin/Operator]`);
+  console.log(`   - PUT  /api/buses/:registrationNumber  (Update Bus - e.g., WP-1234) [Admin/Operator]`);
+  console.log(`   - DELETE /api/buses/:registrationNumber (Delete Bus - e.g., WP-1234) [Admin Only]`);
   console.log('');
   console.log('   🛣️  ROUTE ENDPOINTS:');
   console.log(`   - GET  /api/routes           (Get All Routes)`);
@@ -146,6 +142,13 @@ const server = app.listen(PORT, () => {
   console.log('');
   console.log('   📍 COMING SOON:');
   console.log(`   - /api/trips                 (Trip Management)`);
+  console.log(`   - Extended Bus Endpoints     (Route/Status Filtering, Location Updates, Driver Assignment)`);
+  console.log('========================================');
+  console.log('');
+  console.log('🧪 TESTING READY:');
+  console.log('   Bus Types: AC, Private, CTB');
+  console.log('   Required: registrationNumber, capacity, type, permitNumber, operator.username');
+  console.log('   Optional: amenities, specifications');
   console.log('========================================');
 });
 

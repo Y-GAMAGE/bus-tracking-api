@@ -1,4 +1,3 @@
-// const Bus = require('../models/Bus');
 const mongoose = require('mongoose');
 const Bus = mongoose.models.Bus || require('../models/Bus');
 const Route = require('../models/route');
@@ -17,9 +16,8 @@ const getAllBuses = async (req, res) => {
       limit = 10,
       status,
       type,
-      routeId,
       search,
-      sort = 'busNumber',
+      sort = 'registrationNumber',
       order = 'asc'
     } = req.query;
 
@@ -30,22 +28,21 @@ const getAllBuses = async (req, res) => {
     if (req.user) {
       if (req.user.role === 'operator') {
         // Operators can only see their own buses
-        filter.operatorId = req.user.id;
+        filter['operator.username'] = req.user.username;
       }
       if (req.user.role === 'driver') {
         // Drivers can only see assigned buses
-        filter['driver.userId'] = req.user.id;
+        filter['driver.username'] = req.user.username;
       }
     }
     
     if (status) filter.status = status;
     if (type) filter.type = type;
-    if (routeId) filter.routeId = routeId;
 
     if (search) {
       filter.$or = [
-        { busNumber: { $regex: search, $options: 'i' } },
-        { registrationNumber: { $regex: search, $options: 'i' } }
+        { registrationNumber: { $regex: search, $options: 'i' } },
+        { 'operator.username': { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -53,9 +50,6 @@ const getAllBuses = async (req, res) => {
     const sortOrder = order === 'desc' ? -1 : 1;
 
     const buses = await Bus.find(filter)
-      .populate('routeId', 'routeName from to duration')
-      .populate('currentTrip', 'tripNumber departureTime arrivalTime')
-      .populate('operatorId', 'username operatorDetails.companyName')
       .sort({ [sort]: sortOrder })
       .skip(skip)
       .limit(parseInt(limit))
@@ -84,32 +78,55 @@ const getAllBuses = async (req, res) => {
   }
 };
 
-
-
 /**
- * @desc    Get single bus by ID
- * @route   GET /api/buses/:id
+ * @desc    Get single bus by registration number
+ * @route   GET /api/buses/:registrationNumber
  * @access  Public
  */
-const getBusById = asyncHandler(async (req, res) => {
-  const bus = await Bus.findById(req.params.id)
-    .populate('routeId', 'routeName from to distance duration stops')
-    .populate('currentTrip', 'tripNumber departureTime arrivalTime status')
-    .populate('driver.userId', 'firstName lastName email phoneNumber')
-    .select('-__v');
+const getBusByRegistrationNumber = async (req, res) => {
+  try {
+    const { registrationNumber } = req.params;
+    
+    // Clean and normalize the registration number
+    const cleanRegNumber = registrationNumber.trim().toUpperCase();
+    
+    console.log(`🔍 Searching for bus with registration: "${cleanRegNumber}"`);
+    
+    const bus = await Bus.findOne({ 
+      registrationNumber: cleanRegNumber,
+      isActive: true 
+    }).select('-__v');
 
-  if (!bus || !bus.isActive) {
-    return res.status(404).json({
+    if (!bus) {
+      // Debug: Check if bus exists with different case or status
+      const allBuses = await Bus.find({}).select('registrationNumber isActive');
+      console.log('📋 All buses in database:', allBuses);
+      
+      return res.status(404).json({
+        success: false,
+        message: `Bus with registration number "${cleanRegNumber}" not found`,
+        debug: {
+          searchedFor: cleanRegNumber,
+          availableBuses: allBuses.map(b => ({
+            reg: b.registrationNumber,
+            active: b.isActive
+          }))
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: bus
+    });
+  } catch (error) {
+    console.error('Get bus by registration error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Bus not found'
+      message: 'Error fetching bus'
     });
   }
-
-  res.status(200).json({
-    success: true,
-    data: bus
-  });
-});
+};
 
 /**
  * @desc    Create new bus
@@ -119,7 +136,7 @@ const getBusById = asyncHandler(async (req, res) => {
 const createBus = async (req, res) => {
   try {
     // Check permissions
-    if (!['admin', 'operator'].includes(req.user.role)) {
+    if (!req.user || !['admin', 'operator'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to create buses'
@@ -127,68 +144,47 @@ const createBus = async (req, res) => {
     }
 
     const {
-      busNumber,
       registrationNumber,
-      routeId,
       capacity,
       type,
       amenities,
       specifications,
-      maintenance
+      permitNumber,
+      operator
     } = req.body;
 
-    // Check if route exists
-    const route = await Route.findById(routeId);
-    if (!route) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid route ID'
-      });
-    }
+    // Clean and normalize registration number
+    const cleanRegNumber = registrationNumber.trim().toUpperCase();
 
-    // Check for duplicate bus number or registration
+    // Check for duplicate registration
     const existingBus = await Bus.findOne({
-      $or: [
-        { busNumber: busNumber.toUpperCase() },
-        { registrationNumber: registrationNumber.toUpperCase() }
-      ]
+      registrationNumber: cleanRegNumber
     });
 
     if (existingBus) {
       return res.status(400).json({
         success: false,
-        message: 'Bus number or registration number already exists'
+        message: `Bus with registration number ${cleanRegNumber} already exists`
       });
-    }
-
-    // Set operator ID
-    let operatorId = req.user.id; // For operators, use their own ID
-    if (req.user.role === 'admin' && req.body.operatorId) {
-      operatorId = req.body.operatorId; // Admin can assign to any operator
     }
 
     // Create bus
     const bus = await Bus.create({
-      busNumber: busNumber.toUpperCase(),
-      registrationNumber: registrationNumber.toUpperCase(),
-      routeId,
+      registrationNumber: cleanRegNumber,
       capacity,
       type,
-      operatorId, // Add operator reference
+      permitNumber,
+      operator,
       amenities,
-      specifications,
-      maintenance
+      specifications
     });
 
-    const populatedBus = await Bus.findById(bus._id)
-      .populate('routeId', 'routeName from to')
-      .populate('operatorId', 'username operatorDetails.companyName')
-      .select('-__v');
+    console.log(`✅ Bus created successfully: ${cleanRegNumber}`);
 
     res.status(201).json({
       success: true,
       message: 'Bus created successfully',
-      data: populatedBus
+      data: bus
     });
   } catch (error) {
     console.error('Create bus error:', error);
@@ -200,320 +196,137 @@ const createBus = async (req, res) => {
 };
 
 /**
- * @desc    Update bus
- * @route   PUT /api/buses/:id
+ * @desc    Update bus by registration number
+ * @route   PUT /api/buses/:registrationNumber
  * @access  Protected (Admin/Operator)
  */
-const updateBus = asyncHandler(async (req, res) => {
-  let bus = await Bus.findById(req.params.id);
-
-  if (!bus || !bus.isActive) {
-    return res.status(404).json({
-      success: false,
-      message: 'Bus not found'
-    });
-  }
-
-  // Check if routeId is being updated and if it exists
-  if (req.body.routeId && req.body.routeId !== bus.routeId.toString()) {
-    const route = await Route.findById(req.body.routeId);
-    if (!route) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid route ID'
-      });
-    }
-  }
-
-  // Check for duplicate bus number or registration (excluding current bus)
-  if (req.body.busNumber || req.body.registrationNumber) {
-    const query = { _id: { $ne: req.params.id } };
-    
-    if (req.body.busNumber) {
-      query.busNumber = req.body.busNumber.toUpperCase();
-    }
-    if (req.body.registrationNumber) {
-      query.registrationNumber = req.body.registrationNumber.toUpperCase();
-    }
-
-    const existingBus = await Bus.findOne(query);
-    if (existingBus) {
-      return res.status(400).json({
-        success: false,
-        message: 'Bus number or registration number already exists'
-      });
-    }
-  }
-
-  // Update bus
-  bus = await Bus.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    {
-      new: true,
-      runValidators: true
-    }
-  ).populate('routeId', 'routeName from to');
-
-  res.status(200).json({
-    success: true,
-    message: 'Bus updated successfully',
-    data: bus
-  });
-});
-
-/**
- * @desc    Delete bus (soft delete)
- * @route   DELETE /api/buses/:id
- * @access  Protected (Admin only)
- */
-const deleteBus = asyncHandler(async (req, res) => {
-  const bus = await Bus.findById(req.params.id);
-
-  if (!bus || !bus.isActive) {
-    return res.status(404).json({
-      success: false,
-      message: 'Bus not found'
-    });
-  }
-
-  // Soft delete - set isActive to false
-  await Bus.findByIdAndUpdate(req.params.id, { isActive: false });
-
-  res.status(200).json({
-    success: true,
-    message: 'Bus deleted successfully'
-  });
-});
-
-/**
- * @desc    Get buses by route
- * @route   GET /api/buses/route/:routeId
- * @access  Public
- */
-const getBusesByRoute = asyncHandler(async (req, res) => {
-  const { routeId } = req.params;
-  const { status } = req.query;
-
-  // Check if route exists
-  const route = await Route.findById(routeId);
-  if (!route) {
-    return res.status(404).json({
-      success: false,
-      message: 'Route not found'
-    });
-  }
-
-  // Build filter
-  const filter = { routeId, isActive: true };
-  if (status) filter.status = status;
-
-  const buses = await Bus.find(filter)
-    .populate('routeId', 'routeName from to')
-    .populate('currentTrip', 'tripNumber departureTime arrivalTime')
-    .select('-__v')
-    .sort('busNumber');
-
-  res.status(200).json({
-    success: true,
-    count: buses.length,
-    route: {
-      id: route._id,
-      name: route.routeName,
-      from: route.from,
-      to: route.to
-    },
-    data: buses
-  });
-});
-
-/**
- * @desc    Get buses by status
- * @route   GET /api/buses/status/:status
- * @access  Public
- */
-const getBusesByStatus = asyncHandler(async (req, res) => {
-  const { status } = req.params;
-  
-  // Validate status
-  const validStatuses = ['active', 'inactive', 'maintenance', 'en-route', 'at-stop', 'breakdown'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid status. Valid statuses: ' + validStatuses.join(', ')
-    });
-  }
-
-  const buses = await Bus.find({ status, isActive: true })
-    .populate('routeId', 'routeName from to')
-    .populate('currentTrip', 'tripNumber departureTime arrivalTime')
-    .select('-__v')
-    .sort('busNumber');
-
-  res.status(200).json({
-    success: true,
-    count: buses.length,
-    status,
-    data: buses
-  });
-});
-
-/**
- * @desc    Update bus location
- * @route   PUT /api/buses/:id/location
- * @access  Protected (Driver/Admin)
- */
-const updateBusLocation = async (req, res) => {
+const updateBusByRegistrationNumber = async (req, res) => {
   try {
-    const { longitude, latitude } = req.body;
-    
-    // Validate coordinates
-    if (!longitude || !latitude || 
-        longitude < -180 || longitude > 180 || 
-        latitude < -90 || latitude > 90) {
-      return res.status(400).json({
+    // Check permissions
+    if (!req.user || !['admin', 'operator'].includes(req.user.role)) {
+      return res.status(403).json({
         success: false,
-        message: 'Invalid coordinates'
+        message: 'Not authorized to update buses'
       });
     }
 
-    const bus = await Bus.findById(req.params.id);
+    const { registrationNumber } = req.params;
+    const cleanRegNumber = registrationNumber.trim().toUpperCase();
+    
+    let bus = await Bus.findOne({ 
+      registrationNumber: cleanRegNumber,
+      isActive: true 
+    });
 
-    if (!bus || !bus.isActive) {
+    if (!bus) {
       return res.status(404).json({
         success: false,
-        message: 'Bus not found'
+        message: `Bus with registration number ${cleanRegNumber} not found`
       });
     }
 
-    // Permission check
-    if (req.user.role === 'driver') {
-      // Driver can only update their assigned bus
-      if (bus.driver.userId?.toString() !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to update this bus location'
+    // Check if operator can update this bus
+    if (req.user.role === 'operator' && bus.operator?.username !== req.user.username) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this bus'
+      });
+    }
+
+    // Check for duplicate registration if changing registration number
+    if (req.body.registrationNumber) {
+      const newRegNumber = req.body.registrationNumber.trim().toUpperCase();
+      if (newRegNumber !== cleanRegNumber) {
+        const existingBus = await Bus.findOne({
+          registrationNumber: newRegNumber
         });
-      }
-       } else if (req.user.role === 'operator') {
-      // Operator can only update their own buses
-      if (bus.operatorId?.toString() !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to update this bus location'
-        });
+        
+        if (existingBus) {
+          return res.status(400).json({
+            success: false,
+            message: `Registration number ${newRegNumber} already exists`
+          });
+        }
+        req.body.registrationNumber = newRegNumber;
       }
     }
-    // Admin can update any bus location
 
-    // Update location
-    bus.currentLocation = {
-      type: 'Point',
-      coordinates: [parseFloat(longitude), parseFloat(latitude)]
-    };
-    bus.lastLocationUpdate = new Date();
-
-    await bus.save();
+    // Update bus
+    bus = await Bus.findOneAndUpdate(
+      { registrationNumber: cleanRegNumber },
+      req.body,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
     res.status(200).json({
       success: true,
-      message: 'Bus location updated successfully',
-      data: {
-        busNumber: bus.busNumber,
-        location: bus.currentLocation,
-        updatedAt: bus.lastLocationUpdate
-      }
+      message: 'Bus updated successfully',
+      data: bus
     });
   } catch (error) {
-    console.error('Update location error:', error);
+    console.error('Update bus error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating bus location'
+      message: error.message || 'Error updating bus'
     });
-     }
+  }
 };
 
 /**
- * @desc    Assign driver to bus
- * @route   PUT /api/buses/:id/assign-driver
- * @access  Protected (Operator/Admin)
+ * @desc    Delete bus by registration number (soft delete)
+ * @route   DELETE /api/buses/:registrationNumber
+ * @access  Protected (Admin only)
  */
-const assignDriver = async (req, res) => {
+const deleteBusByRegistrationNumber = async (req, res) => {
   try {
     // Check permissions
-    if (!['admin', 'operator'].includes(req.user.role)) {
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to assign drivers'
+        message: 'Not authorized to delete buses. Admin access required.'
       });
     }
 
-    const { userId } = req.body;
+    const { registrationNumber } = req.params;
+    const cleanRegNumber = registrationNumber.trim().toUpperCase();
+    
+    const bus = await Bus.findOne({ 
+      registrationNumber: cleanRegNumber,
+      isActive: true 
+    });
 
-    const bus = await Bus.findById(req.params.id);
-
-    if (!bus || !bus.isActive) {
+    if (!bus) {
       return res.status(404).json({
         success: false,
-        message: 'Bus not found'
+        message: `Bus with registration number ${cleanRegNumber} not found`
       });
     }
 
-    // Check if operator can assign to this bus
-    if (req.user.role === 'operator' && bus.operatorId?.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to assign driver to this bus'
-      });
-    }
 
-    // Verify driver exists and has driver role
-    const driver = await User.findById(userId);
-    
-    if (!driver || driver.role !== 'driver') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid driver user ID'
-      });
-    }
-
-    // Update driver assignment
-    bus.driver = {
-      userId: driver._id,
-      name: `${driver.profile?.firstName || ''} ${driver.profile?.lastName || ''}`.trim() || driver.username,
-      contactNumber: driver.phone || '',
-      licenseNumber: driver.driverDetails?.licenseNumber || ''
-    };
-
-    await bus.save();
-
-    const updatedBus = await Bus.findById(bus._id)
-      .populate('driver.userId', 'username profile phone')
-      .select('busNumber registrationNumber driver');
+    const deletedBus = await Bus.findOneAndDelete({
+      registrationNumber: cleanRegNumber
+    });
 
     res.status(200).json({
       success: true,
-      message: 'Driver assigned successfully',
-      data: updatedBus
+      message: `Bus ${cleanRegNumber} deleted successfully`
     });
-
-    } catch (error) {
-    console.error('Assign driver error:', error);
+  } catch (error) {
+    console.error('Delete bus error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error assigning driver'
+      message: 'Error deleting bus'
     });
   }
 };
 
 module.exports = {
   getAllBuses,
-  getBusById,
+  getBusByRegistrationNumber,
   createBus,
-  updateBus,
-  deleteBus,
-  getBusesByRoute,
-  getBusesByStatus,
-  updateBusLocation,
-  assignDriver
+  updateBusByRegistrationNumber,
+  deleteBusByRegistrationNumber
 };
