@@ -1,0 +1,427 @@
+{
+	"info": {
+		"_postman_id": "838d82a1-e2d2-4cbd-b735-31eef26edd39",
+		"name": "bus-tracking-api",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "44204677",
+		"_collection_link": "https://yalinigamage.postman.co/workspace/Yalini-Gamage's-Workspace~ad655013-349b-46d7-802d-2fb356aa2dd6/collection/44204677-838d82a1-e2d2-4cbd-b735-31eef26edd39?action=share&source=collection_link&creator=44204677"
+	},
+	"item": [
+		{
+			"name": "Authorization",
+			"item": [
+				{
+					"name": "Register an admin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"username\": \"admin_user1\",\r\n  \"email\": \"admin1@bustrack.lk\",\r\n  \"password\": \"admin123\",\r\n  \"role\": \"admin\",\r\n  \"phone\": \"0112345678\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/auth/register",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"auth",
+								"register"
+							],
+							"query": [
+								{
+									"key": "",
+									"value": null,
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register a Passenger",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Register a driver",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Register an operator",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin login",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin - me",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin get profile",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin change password",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin logout",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin forgot password",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin reset password",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Admin verify token",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Register a driver",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"username\": \"driver_ben\",        \r\n  \"email\": \"benn.driver@bustrack.lk\", \r\n  \"password\": \"driver123\",         \r\n  \"role\": \"driver\",                \r\n  \"phone\": \"0779876543\",          \r\n  \"driverDetails\": {              \r\n    \"licenseNumber\": \"B1234567\",   \r\n    \"licenseExpiry\": \"2025-12-31\", \r\n    \"experience\": 5                \r\n  }\r\n}"
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/auth/register",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"auth",
+								"register"
+							],
+							"query": [
+								{
+									"key": "",
+									"value": null,
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Route operations",
+			"item": [
+				{
+					"name": "Create a route",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4ZTk0OTkwYjA3NmQ4ZmNkMTBiMjI5NiIsImlhdCI6MTc2MDExOTE4NCwiZXhwIjoxNzYyNzExMTg0fQ.yqrSVxe_U4PAZpEHoNbpt49Sr4uHck09-WhjZnIQpfg",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"routeId\": \"GMP-CMB-001\",\r\n  \"name\": \"Gampola - Colombo Central Express\",\r\n  \"origin\": {\r\n    \"city\": \"Gampola\",\r\n    \"terminal\": \"Gampola Bus Stand\"\r\n  },\r\n  \"destination\": {\r\n    \"city\": \"Colombo\",\r\n    \"terminal\": \"Colombo Central Bus Stand\"\r\n  },\r\n  \"distance\": 116,\r\n  \"estimatedDuration\": 250,\r\n  \"stops\": [\r\n    {\r\n      \"name\": \"Gampola\",\r\n      \"sequence\": 1,\r\n      \"estimatedArrivalOffset\": 0,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Weligalla\",\r\n      \"sequence\": 2,\r\n      \"estimatedArrivalOffset\": 15,\r\n      \"stopDuration\": 3\r\n    },\r\n    {\r\n      \"name\": \"Gelioya\",\r\n      \"sequence\": 3,\r\n      \"estimatedArrivalOffset\": 25,\r\n      \"stopDuration\": 3\r\n    },\r\n    {\r\n      \"name\": \"Peradeniya\",\r\n      \"sequence\": 4,\r\n      \"estimatedArrivalOffset\": 35,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Pilimathalawa\",\r\n      \"sequence\": 5,\r\n      \"estimatedArrivalOffset\": 50,\r\n      \"stopDuration\": 3\r\n    },\r\n    {\r\n      \"name\": \"Kadugannawa\",\r\n      \"sequence\": 6,\r\n      \"estimatedArrivalOffset\": 70,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Mawanella\",\r\n      \"sequence\": 7,\r\n      \"estimatedArrivalOffset\": 90,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Kegalle\",\r\n      \"sequence\": 8,\r\n      \"estimatedArrivalOffset\": 110,\r\n      \"stopDuration\": 10\r\n    },\r\n    {\r\n      \"name\": \"Warakapola\",\r\n      \"sequence\": 9,\r\n      \"estimatedArrivalOffset\": 130,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Nittambuwa\",\r\n      \"sequence\": 10,\r\n      \"estimatedArrivalOffset\": 150,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Yakkala\",\r\n      \"sequence\": 11,\r\n      \"estimatedArrivalOffset\": 170,\r\n      \"stopDuration\": 3\r\n    },\r\n    {\r\n      \"name\": \"Kadawatha\",\r\n      \"sequence\": 12,\r\n      \"estimatedArrivalOffset\": 185,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Kiribathgoda\",\r\n      \"sequence\": 13,\r\n      \"estimatedArrivalOffset\": 200,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Kelaniya\",\r\n      \"sequence\": 14,\r\n      \"estimatedArrivalOffset\": 215,\r\n      \"stopDuration\": 5\r\n    },\r\n    {\r\n      \"name\": \"Peliyagoda\",\r\n      \"sequence\": 15,\r\n      \"estimatedArrivalOffset\": 230,\r\n      \"stopDuration\": 3\r\n    },\r\n    {\r\n      \"name\": \"Colombo Central Bus Stand\",\r\n      \"sequence\": 16,\r\n      \"estimatedArrivalOffset\": 250,\r\n      \"stopDuration\": 0\r\n    }\r\n  ],\r\n  \"fare\": {\r\n    \"normal\": 180,\r\n    \"semiExpress\": 220,\r\n    \"express\": 260,\r\n    \"luxury\": 320\r\n  },\r\n  \"frequency\": \"Every 45 minutes\",\r\n  \"category\": \"inter-provincial\",\r\n  \"operatingHours\": {\r\n    \"start\": \"04:30\",\r\n    \"end\": \"21:30\"\r\n  }\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/routes",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"routes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get all routes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "BearereyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4ZTllNjJhYjA3NmQ4ZmNkMTBiMjJhOSIsImlhdCI6MTc2MDE1OTI3NCwiZXhwIjoxNzYyNzUxMjc0fQ.3gNCLJ__nGb5l2X2NDe3htXV-n5VNp6IPQPRIcM1sww",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:3000/api/routes",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"routes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get a single route",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "BearereyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4ZWMyMmZhMjVhYWM0ODQyMWExNjU1YyIsInJvbGUiOiJkcml2ZXIiLCJlbWFpbCI6ImJlbm4uZHJpdmVyQGJ1c3RyYWNrLmxrIiwiaWF0IjoxNzYwMzA1OTE0LCJleHAiOjE3NjI4OTc5MTR9.a_QHAjSXLZSFMQCWRx_sfyyNPu9FE9kW8YJO_4nfzXQ",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:3000/api/routes/route/GMP-CMB-001",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"routes",
+								"route",
+								"GMP-CMB-001"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search routes",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Update a route",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a route",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bus opearations",
+			"item": [
+				{
+					"name": "Create a bus",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Get all buse",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Get a single bus",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Update a bus",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "New Request",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a bus",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "New Folder",
+			"item": [
+				{
+					"name": "Create a route",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "New Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4ZTk0OTkwYjA3NmQ4ZmNkMTBiMjI5NiIsImlhdCI6MTc2MDExOTE4NCwiZXhwIjoxNzYyNzExMTg0fQ.yqrSVxe_U4PAZpEHoNbpt49Sr4uHck09-WhjZnIQpfg",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"tripId\": \"CMB-KANDY-001-20241014-2000\",\r\n  \"registrationNumber\": \"WP-1133\",\r\n  \"routeId\": \"CMB-KANDY-001\",\r\n  \"scheduledDate\": \"2024-10-14T00:00:00.000Z\",\r\n  \"scheduledStartTime\": \"2024-10-14T20:00:00.000Z\",\r\n  \"scheduledEndTime\": \"2024-10-15T00:00:00.000Z\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/trips",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"trips"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
