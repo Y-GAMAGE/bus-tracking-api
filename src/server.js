@@ -1,3 +1,4 @@
+// src/server.js
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -14,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging (optional but helpful for debugging)
+// Request logging
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   next();
@@ -24,8 +25,8 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'NTC Bus Tracking API',
-    version: '1.0.0',
+    message: 'NTC Bus Tracking API with GPS Simulation',
+    version: '2.0.0',
     timestamp: new Date().toISOString(),
     database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
     endpoints: {
@@ -33,6 +34,7 @@ app.get('/', (req, res) => {
       buses: '/api/buses',
       routes: '/api/routes',
       locations: '/api/locations',
+      trips: '/api/trips',
       health: '/health'
     }
   });
@@ -69,19 +71,16 @@ app.use('/api/routes', require('./routes/routeRoutes'));
 // Location routes
 app.use('/api/locations', require('./routes/locationRoutes'));
 
-// TODO: Add other routes here as you create them
-// app.use('/api/trips', require('./routes/tripRoutes'));
+// Trip routes with GPS simulation
+app.use('/api/trips', require('./routes/tripRoutes'));
 
 // ========================================
-// ERROR HANDLING MIDDLEWARE (Must be last)
+// ERROR HANDLING MIDDLEWARE
 // ========================================
 
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
-// 404 handler - catches all undefined routes
 app.use(notFound);
-
-// Global error handler - handles all errors
 app.use(errorHandler);
 
 // ========================================
@@ -98,64 +97,68 @@ const server = app.listen(PORT, () => {
   console.log('========================================');
   console.log('📋 Available endpoints:');
   console.log('');
-  console.log('   🏠 GENERAL ENDPOINTS:');
+  console.log('   🏠 GENERAL:');
   console.log(`   - GET  /                     (API Info)`);
   console.log(`   - GET  /health               (Health Check)`);
   console.log('');
-  console.log('   🔐 AUTH ENDPOINTS:');
+  console.log('   🔐 AUTH:');
   console.log(`   - POST /api/auth/register    (User Registration)`);
   console.log(`   - POST /api/auth/login       (User Login)`);
-  console.log(`   - GET  /api/auth/me          (Get Profile)`);
-  console.log(`   - PUT  /api/auth/profile     (Update Profile)`);
-  console.log(`   - PUT  /api/auth/change-password (Change Password)`);
   console.log(`   - POST /api/auth/logout      (User Logout)`);
-  console.log(`   - POST /api/auth/forgot-password (Forgot Password)`);
-  console.log(`   - POST /api/auth/reset-password (Reset Password)`);
-  console.log(`   - GET  /api/auth/verify      (Verify Token)`);
+  console.log(`   - GET  /api/auth/profile     (Get User Profile)`);
+  console.log(`   - PUT  /api/auth/profile     (Update Profile)`);
+  console.log(`   - POST /api/auth/forgot      (Forgot Password)`);
+  console.log(`   - POST /api/auth/reset       (Reset Password)`);
   console.log('');
-console.log('   🚌 BUS ENDPOINTS (PRACTICAL):');
-  console.log(`   - GET  /api/buses                      (Get All Buses)`);
-  console.log(`   - GET  /api/buses/:registrationNumber  (Get Bus - e.g., WP-1234)`);
-  console.log(`   - POST /api/buses                      (Create Bus) [Admin/Operator]`);
-  console.log(`   - PUT  /api/buses/:registrationNumber  (Update Bus - e.g., WP-1234) [Admin/Operator]`);
-  console.log(`   - DELETE /api/buses/:registrationNumber (Delete Bus - e.g., WP-1234) [Admin Only]`);
+  console.log('   🚌 BUSES:');
+  console.log(`   - GET  /api/buses                    (Get All Buses)`);
+  console.log(`   - GET  /api/buses/:regNumber         (Get Bus by Registration)`);
+  console.log(`   - POST /api/buses                    (Create Bus)`);
+  console.log(`   - PUT  /api/buses/:regNumber         (Update Bus)`);
+  console.log(`   - DELETE /api/buses/:regNumber       (Delete Bus)`);
+  console.log(`   - GET  /api/buses/route/:routeId     (Get Buses by Route)`);
+  console.log(`   - GET  /api/buses/status/:status     (Get Buses by Status)`);
+  console.log(`   - POST /api/buses/:regNumber/assign  (Assign Bus to Route)`);
   console.log('');
-  console.log('   🛣️  ROUTE ENDPOINTS:');
-  console.log(`   - GET  /api/routes           (Get All Routes)`);
-  console.log(`   - GET  /api/routes/:id       (Get Single Route)`);
-  console.log(`   - GET  /api/routes/route/:routeId (Get Route by RouteID)`);
-  console.log(`   - POST /api/routes           (Create Route)`);
-  console.log(`   - PUT  /api/routes/route/:routeId (Update Route)`);
-  console.log(`   - DELETE /api/routes/route/:routeId (Delete Route)`);
-  console.log(`   - GET  /api/routes/search    (Search Routes)`);
+  console.log('   🛣️  ROUTES:');
+  console.log(`   - GET  /api/routes                   (Get All Routes)`);
+  console.log(`   - GET  /api/routes/:id               (Get Route by ID or routeId)`);
+  console.log(`   - GET  /api/routes/route/:routeId    (Get Route by routeId)`);
+  console.log(`   - POST /api/routes                   (Create Route)`);
+  console.log(`   - PUT  /api/routes/route/:routeId    (Update Route)`);
+  console.log(`   - DELETE /api/routes/:routeId        (Delete Route)`);
+  console.log(`   - GET  /api/routes/search            (Search Routes by Origin/Destination)`);
   console.log('');
-  console.log('   📍 LOCATION ENDPOINTS:');
-  console.log(`   - GET  /api/locations        (Get All Location Records)`);
-  console.log(`   - GET  /api/locations/:id    (Get Single Location Record)`);
-  console.log(`   - GET  /api/locations/nearby (Get Nearby Buses)`);
-  console.log(`   - GET  /api/locations/bus/:busId/current (Get Current Bus Location)`);
-  console.log(`   - GET  /api/locations/bus/:busId/recent (Get Recent Bus Locations)`);
-  console.log(`   - GET  /api/locations/bus/:busId/history (Get Bus Location History)`);
-  console.log(`   - POST /api/locations        (Create Location Record)`);
-  console.log(`   - PUT  /api/locations/:id    (Update Location Record)`);
-  console.log(`   - DELETE /api/locations/:id  (Delete Location Record)`);
+  console.log('   📍 LOCATIONS:');
+  console.log(`   - GET  /api/locations                          (Get All Locations)`);
+  console.log(`   - GET  /api/locations/:id                      (Get Location by ID)`);
+  console.log(`   - GET  /api/locations/bus/:regNumber/current   (Get Current Bus Location)`);
+  console.log(`   - GET  /api/locations/trip/:tripId/history     (Get Trip GPS History)`);
+  console.log(`   - POST /api/locations                          (Record GPS Point)`);
+  console.log(`   - PUT  /api/locations/:id                      (Update Location)`);
+  console.log(`   - DELETE /api/locations/:id                    (Delete Location)`);
   console.log('');
-  console.log('   📍 COMING SOON:');
-  console.log(`   - /api/trips                 (Trip Management)`);
-  console.log(`   - Extended Bus Endpoints     (Route/Status Filtering, Location Updates, Driver Assignment)`);
+  console.log('   🚌 TRIPS & GPS SIMULATION:');
+  console.log(`   - GET  /api/trips                     (Get All Trips)`);
+  console.log(`   - GET  /api/trips/:tripId             (Get Trip Details)`);
+  console.log(`   - POST /api/trips                     (Create Trip)`);
+  console.log(`   - PUT  /api/trips/:tripId             (Update Trip)`);
+  console.log(`   - DELETE /api/trips/:tripId           (Delete Trip)`);
+  console.log(`   - POST /api/trips/:tripId/start       (Start Trip)`);
+  console.log(`   - POST /api/trips/:tripId/complete    (Complete Trip)`);
+  console.log(`   - POST /api/trips/:tripId/simulate-gps (Start 6-min GPS Demo)`);
+  console.log(`   - GET  /api/trips/bus/:regNumber      (Get Trips by Bus)`);
+  console.log(`   - GET  /api/trips/route/:routeId      (Get Trips by Route)`);
+  console.log(`   - GET  /api/trips/date/:date          (Get Trips by Date)`);
   console.log('========================================');
   console.log('');
-  console.log('🧪 TESTING READY:');
-  console.log('   Bus Types: AC, Private, CTB');
-  console.log('   Required: registrationNumber, capacity, type, permitNumber, operator.username');
-  console.log('   Optional: amenities, specifications');
+
   console.log('========================================');
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error('❌ Unhandled Promise Rejection:', err);
-  // Close server & exit process
   server.close(() => process.exit(1));
 });
 

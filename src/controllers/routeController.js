@@ -1,22 +1,17 @@
 const Route = require('../models/route');
+const mongoose = require('mongoose');
 const asyncHandler = require('express-async-handler');
-// ✅ Safe Bus model getter
+
 const getBus = () => {
   return mongoose.models.Bus || require('../models/Bus');
 };
 
-/**
- * @desc    Get all routes with pagination, filtering, and sorting
- * @route   GET /api/routes
- * @access  Public
- */
 const getAllRoutes = asyncHandler(async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Build filter object
     const filter = {};
     
     if (req.query.status) {
@@ -44,12 +39,10 @@ const getAllRoutes = asyncHandler(async (req, res) => {
       ];
     }
 
-    // Build sort object
     const sortField = req.query.sort || 'routeId';
     const sortOrder = req.query.order === 'desc' ? -1 : 1;
     const sort = { [sortField]: sortOrder };
 
-    // Execute queries
     const routes = await Route.find(filter)
       .sort(sort)
       .skip(skip)
@@ -80,19 +73,42 @@ const getAllRoutes = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get single route by ID
- * @route   GET /api/routes/:id
- * @access  Public
- */
 const getRouteById = asyncHandler(async (req, res) => {
   try {
-    const route = await Route.findById(req.params.id);
+    const { id } = req.params;
+    
+    // Validate that ID parameter exists
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID parameter is required'
+      });
+    }
+
+    // Safe string conversion and trimming
+    const identifier = String(id).trim();
+    
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID cannot be empty'
+      });
+    }
+
+    let route;
+
+    // Check if it's a valid MongoDB ObjectId (24 hex characters)
+    if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
+      route = await Route.findById(identifier);
+    } else {
+      // Search by routeId string
+      route = await Route.findOne({ routeId: identifier.toUpperCase() });
+    }
 
     if (!route) {
       return res.status(404).json({
         success: false,
-        message: 'Route not found'
+        message: `Route not found: ${identifier}`
       });
     }
 
@@ -101,12 +117,6 @@ const getRouteById = asyncHandler(async (req, res) => {
       data: route
     });
   } catch (error) {
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({
-        success: false,
-        message: 'Route not found'
-      });
-    }
     res.status(500).json({
       success: false,
       message: error.message || 'Error fetching route'
@@ -114,19 +124,32 @@ const getRouteById = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get route by route ID (string)
- * @route   GET /api/routes/route/:routeId
- * @access  Public
- */
 const getRouteByRouteId = asyncHandler(async (req, res) => {
   try {
-    const route = await Route.findOne({ routeId: req.params.routeId.toUpperCase() });
+    const { routeId } = req.params;
+    
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    const cleanRouteId = String(routeId).trim();
+    
+    if (!cleanRouteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID cannot be empty'
+      });
+    }
+
+    const route = await Route.findOne({ routeId: cleanRouteId.toUpperCase() });
 
     if (!route) {
       return res.status(404).json({
         success: false,
-        message: 'Route not found'
+        message: `Route not found: ${cleanRouteId}`
       });
     }
 
@@ -142,11 +165,6 @@ const getRouteByRouteId = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Create new route
- * @route   POST /api/routes
- * @access  Private (Admin, Operator)
- */
 const createRoute = asyncHandler(async (req, res) => {
   try {
     const {
@@ -163,17 +181,33 @@ const createRoute = asyncHandler(async (req, res) => {
       operatingHours
     } = req.body;
 
-    // Check if route ID already exists
-    const existingRoute = await Route.findOne({ routeId: routeId.toUpperCase() });
+    // Validation
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    const cleanRouteId = String(routeId).trim().toUpperCase();
+    
+    if (!cleanRouteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID cannot be empty'
+      });
+    }
+
+    const existingRoute = await Route.findOne({ routeId: cleanRouteId });
     if (existingRoute) {
       return res.status(400).json({
         success: false,
-        message: 'Route ID already exists'
+        message: `Route ID already exists: ${cleanRouteId}`
       });
     }
 
     const routeData = {
-      routeId: routeId.toUpperCase(),
+      routeId: cleanRouteId,
       name,
       origin,
       destination,
@@ -207,49 +241,57 @@ const createRoute = asyncHandler(async (req, res) => {
   }
 });
 
-
-/**
- * @desc    Update route
- * @route   PUT /api/routes/route/:routeId
- * @access  Private (Admin, Operator)
- */
 const updateRoute = asyncHandler(async (req, res) => {
   try {
-    // ✅ Add .trim() to remove whitespace and newlines
-    const routeId = req.params.routeId.trim().toUpperCase();
+    const { routeId } = req.params;
     
-    // Find the route by routeId
-    const route = await Route.findOne({ routeId: routeId });
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    const cleanRouteId = String(routeId).trim().toUpperCase();
+    
+    if (!cleanRouteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID cannot be empty'
+      });
+    }
+    
+    const route = await Route.findOne({ routeId: cleanRouteId });
 
     if (!route) {
       return res.status(404).json({
         success: false,
-        message: `Route with ID ${routeId} not found`
+        message: `Route with ID ${cleanRouteId} not found`
       });
     }
 
-    // If updating routeId, check for conflicts
     if (req.body.routeId) {
-      req.body.routeId = req.body.routeId.trim().toUpperCase(); // ✅ Add .trim() here too
+      const newRouteId = String(req.body.routeId).trim().toUpperCase();
       
-      if (req.body.routeId !== route.routeId) {
+      if (newRouteId !== route.routeId) {
         const existingRoute = await Route.findOne({ 
-          routeId: req.body.routeId,
+          routeId: newRouteId,
           _id: { $ne: route._id }
         });
         
         if (existingRoute) {
           return res.status(400).json({
             success: false,
-            message: `Route ID ${req.body.routeId} already exists`
+            message: `Route ID ${newRouteId} already exists`
           });
         }
       }
+      
+      req.body.routeId = newRouteId;
     }
 
-    // Update the route
     const updatedRoute = await Route.findOneAndUpdate(
-      { routeId: routeId },
+      { routeId: cleanRouteId },
       req.body,
       {
         new: true,
@@ -276,25 +318,37 @@ const updateRoute = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Delete route
- * @route   DELETE /api/routes/:id
- * @access  Private (Admin only)
- */
 const deleteRoute = asyncHandler(async (req, res) => {
   try {
-    const route = await Route.findOne({ routeId: req.params.routeId.toUpperCase() });
+    const { routeId } = req.params;
+    
+    if (!routeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID is required'
+      });
+    }
+
+    const cleanRouteId = String(routeId).trim().toUpperCase();
+    
+    if (!cleanRouteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route ID cannot be empty'
+      });
+    }
+
+    const route = await Route.findOne({ routeId: cleanRouteId });
 
     if (!route) {
       return res.status(404).json({
         success: false,
-        message: 'Route not found'
+        message: `Route not found: ${cleanRouteId}`
       });
     }
 
-    // Check if route is being used by buses
     const Bus = getBus();
-    const busesUsingRoute = await Bus.countDocuments({ routeId: req.params.id });
+    const busesUsingRoute = await Bus.countDocuments({ routeId: route._id });
     
     if (busesUsingRoute > 0) {
       return res.status(400).json({
@@ -303,7 +357,7 @@ const deleteRoute = asyncHandler(async (req, res) => {
       });
     }
 
-    await Route.findOneAndDelete({ routeId: req.params.routeId.toUpperCase() });
+    await Route.findOneAndDelete({ routeId: cleanRouteId });
 
     res.status(200).json({
       success: true,
@@ -317,11 +371,6 @@ const deleteRoute = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get routes by origin and destination
- * @route   GET /api/routes/search
- * @access  Public
- */
 const searchRoutes = asyncHandler(async (req, res) => {
   try {
     const { origin, destination } = req.query;

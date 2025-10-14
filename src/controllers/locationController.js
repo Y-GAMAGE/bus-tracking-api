@@ -1,487 +1,421 @@
 const Location = require('../models/location');
-const asyncHandler = require('express-async-handler');
-const mongoose = require('mongoose');
-
-// ✅ Safe Bus model getter
-const getBus = () => {
-  return mongoose.models.Bus || require('../models/Bus');
-};
+const Trip = require('../models/trip');
+const Route = require('../models/route');
 
 /**
- * @desc    Get all location records with filtering
- * @route   GET /api/locations
- * @access  Public
+ * Helper function for distance calculation using Haversine formula
  */
-const getAllLocations = asyncHandler(async (req, res) => {
-  try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      busId, 
-      status, 
-      source,
-      startDate,
-      endDate,
-      sort = '-timestamp'
-    } = req.query;
-    
-    // Build filter object
-    const filter = {};
-    
-    if (busId) filter.busId = busId;
-    if (status) filter.status = status;
-    if (source) filter.source = source;
-    
-    // Date range filter
-    if (startDate || endDate) {
-      filter.timestamp = {};
-      if (startDate) filter.timestamp.$gte = new Date(startDate);
-      if (endDate) filter.timestamp.$lte = new Date(endDate);
-    }
-    
-    // Execute query with pagination
-    const locations = await Location.find(filter)
-      .populate('busId', 'busNumber registrationNumber routeId')
-      .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    
-    const total = await Location.countDocuments(filter);
-    
-    res.status(200).json({
-      success: true,
-      count: locations.length,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page < Math.ceil(total / limit),
-        hasPrevPage: page > 1
-      },
-      data: locations
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error fetching locations'
-    });
-  }
-});
+function calculateDistance(pos1, pos2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = pos1.lat * Math.PI / 180;
+  const φ2 = pos2.lat * Math.PI / 180;
+  const Δφ = (pos2.lat - pos1.lat) * Math.PI / 180;
+  const Δλ = (pos2.lng - pos1.lng) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // Distance in meters
+}
 
 /**
- * @desc    Get current location for a specific bus
- * @route   GET /api/locations/bus/:busId/current
- * @access  Public
- * ⭐ ESSENTIAL: Real-time bus tracking
+ * ✅ Extract time from stored datetime WITHOUT timezone conversion
  */
-const getCurrentBusLocation = asyncHandler(async (req, res) => {
+function formatTimeToLocal(utcTimeString) {
+  const date = new Date(utcTimeString);
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
+ * ✅ Convert datetime to separate date and time fields WITHOUT timezone conversion
+ */
+function formatDateTimeToLocal(utcTimeString) {
+  const date = new Date(utcTimeString);
+  
+  const year = date.getUTCFullYear();
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = date.getUTCDate().toString().padStart(2, '0');
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hours}:${minutes}`
+  };
+}
+
+/**
+ * Calculate estimated arrival time based on current GPS position and distance
+ */
+function calculateEstimatedArrival(currentLat, currentLng, stop, currentSpeed) {
+  const stopLat = stop.coordinates.coordinates[1];
+  const stopLng = stop.coordinates.coordinates[0];
+  
+  const distance = calculateDistance(
+    { lat: currentLat, lng: currentLng },
+    { lat: stopLat, lng: stopLng }
+  );
+  
+  const speedKmh = currentSpeed || 50;
+  const distanceKm = distance / 1000;
+  const timeHours = distanceKm / speedKmh;
+  const timeMinutes = Math.round(timeHours * 60);
+  
+  const estimatedArrival = new Date(Date.now() + (timeMinutes * 60 * 1000));
+  
+  return {
+    estimatedArrival,
+    timeMinutes,
+    distanceKm: Math.round(distanceKm * 10) / 10
+  };
+}
+
+/**
+ * @desc    Get current location for a specific bus (CLEAN VERSION - NO GARBAGE)
+ * @route   GET /api/locations/bus/:busRegistrationNumber/current
+ * @access  Public
+ */
+async function getCurrentBusLocation(req, res) {
+  console.log('🚀 CLEAN LOCATION CONTROLLER - NO TRIPROGRESS GARBAGE!');
+  console.log('🔥 Getting trip data for bus:', req.params.busRegistrationNumber);
+  
   try {
-    const Bus = getBus();
-    const bus = await Bus.findById(req.params.busId).populate('routeId', 'routeId name');
+    const registrationNumber = req.params.busRegistrationNumber;
     
-    if (!bus) {
-      return res.status(404).json({
+    if (!registrationNumber) {
+      return res.status(400).json({
         success: false,
-        message: 'Bus not found'
+        message: 'Bus registration number is required'
       });
     }
     
-    const currentLocation = await Location.findOne({ busId: req.params.busId })
-      .sort({ timestamp: -1 });
+    // ✅ Find the latest active trip for this bus
+    const latestTrip = await Trip.findOne({ 
+      registrationNumber: registrationNumber.toUpperCase(),
+      status: { $in: ['scheduled', 'in-progress', 'started'] }
+    })
+    .sort({ createdAt: -1 });
+
+    if (!latestTrip) {
+      return res.status(404).json({
+        success: false,
+        message: `No active trip found for bus ${registrationNumber}`
+      });
+    }
+
+    console.log('✅ Found trip:', latestTrip.tripId);
+
+    // ✅ Find the most recent location for this specific trip
+    const currentLocation = await Location.findOne({ 
+      registrationNumber: registrationNumber.toUpperCase(),
+      tripId: latestTrip._id
+    })
+    .sort({ timestamp: -1 });
+
+    // ✅ Get route data
+    const route = await Route.findOne({ 
+      routeId: latestTrip.routeId,
+      isActive: true 
+    });
+    
+    if (!route) {
+      return res.status(404).json({
+        success: false,
+        message: 'Route data not found'
+      });
+    }
+
+    // ✅ Use GPS location or route start as fallback
+    let busLat, busLng, locationSpeed = 0, locationTimestamp;
     
     if (!currentLocation) {
-      return res.status(404).json({
-        success: false,
-        message: 'No location data found for this bus'
-      });
+      // Use first stop as current location
+      const firstStop = route.stops.sort((a, b) => a.sequence - b.sequence)[0];
+      busLat = firstStop.coordinates.coordinates[1];
+      busLng = firstStop.coordinates.coordinates[0];
+      locationTimestamp = new Date();
+      console.log('⚠️ Using route start location');
+    } else {
+      busLat = currentLocation.location.coordinates[1];
+      busLng = currentLocation.location.coordinates[0];
+      locationSpeed = currentLocation.speed || 0;
+      locationTimestamp = currentLocation.timestamp;
+      console.log('📍 Using GPS location');
     }
-    
-    res.status(200).json({
-      success: true,
-      bus: {
-        id: bus._id,
-        busNumber: bus.busNumber,
-        registrationNumber: bus.registrationNumber,
-        route: bus.routeId
-      },
-      currentLocation: {
-        coordinates: {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude
-        },
-        speed: currentLocation.speed,
-        heading: currentLocation.heading,
-        address: currentLocation.address,
-        status: currentLocation.status,
-        timestamp: currentLocation.timestamp,
-        source: currentLocation.source
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error fetching current location'
-    });
-  }
-});
 
-/**
- * @desc    Get recent location history for a bus
- * @route   GET /api/locations/bus/:busId/history
- * @access  Public
- * ⭐ ESSENTIAL: Track bus movement patterns
- */
-const getBusLocationHistory = asyncHandler(async (req, res) => {
-  try {
-    const { limit = 50, hours = 24 } = req.query;
-    
-    const Bus = getBus();
-    const bus = await Bus.findById(req.params.busId);
-    
-    if (!bus) {
-      return res.status(404).json({
-        success: false,
-        message: 'Bus not found'
-      });
-    }
-    
-    // Get locations from last X hours
-    const startTime = new Date(Date.now() - (hours * 60 * 60 * 1000));
-    
-    const locations = await Location.find({
-      busId: req.params.busId,
-      timestamp: { $gte: startTime }
-    })
-    .sort({ timestamp: -1 })
-    .limit(parseInt(limit))
-    .select('location speed heading address status timestamp source');
-    
-    res.status(200).json({
-      success: true,
-      count: locations.length,
-      bus: {
-        id: bus._id,
-        busNumber: bus.busNumber,
-        registrationNumber: bus.registrationNumber
-      },
-      timeRange: {
-        from: startTime,
-        to: new Date(),
-        hours: parseInt(hours)
-      },
-      data: locations.map(loc => ({
-        coordinates: {
-          latitude: loc.latitude,
-          longitude: loc.longitude
-        },
-        speed: loc.speed,
-        heading: loc.heading,
-        address: loc.address,
-        status: loc.status,
-        timestamp: loc.timestamp,
-        source: loc.source
-      }))
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error fetching location history'
-    });
-  }
-});
+    const currentTime = new Date();
 
-/**
- * @desc    Get live locations of all active buses
- * @route   GET /api/locations/live
- * @access  Public
- * ⭐ ESSENTIAL: Real-time dashboard for all buses
- */
-const getLiveBusLocations = asyncHandler(async (req, res) => {
-  try {
-    const { routeId, status } = req.query;
-    
-    // Get recent locations (last 15 minutes) for all buses
-    const recentTime = new Date(Date.now() - 15 * 60 * 1000);
-    
-    // Aggregate to get latest location per bus
-    const pipeline = [
-      {
-        $match: {
-          timestamp: { $gte: recentTime }
+    // ✅ Format times
+    const scheduledDateInfo = formatDateTimeToLocal(latestTrip.scheduledDate);
+    const scheduledStartInfo = formatDateTimeToLocal(latestTrip.scheduledStartTime);
+    const scheduledEndInfo = formatDateTimeToLocal(latestTrip.scheduledEndTime);
+    const currentDateTime = formatDateTimeToLocal(currentTime);
+    const locationDateTime = formatDateTimeToLocal(locationTimestamp);
+
+    // ✅ Get upcoming stops (NO PASSED STOPS)
+    const upcomingStops = latestTrip.stopArrivals
+      .filter(stopArrival => !stopArrival.hasPassed && !stopArrival.actualArrival)
+      .map(stopArrival => {
+        const scheduledTime = formatTimeToLocal(stopArrival.estimatedArrival);
+        const routeStop = route.stops.find(s => s.name === stopArrival.stopName);
+        
+        if (!routeStop) {
+          return {
+            stopName: stopArrival.stopName,
+            scheduledArrival: scheduledTime,
+            estimatedArrival: scheduledTime,
+            delayMinutes: 0,
+            delayStatus: 'on-time',
+            distanceFromCurrentLocation: 'N/A',
+            estimatedTravelTime: 'N/A'
+          };
         }
-      },
-      {
-        $sort: { busId: 1, timestamp: -1 }
-      },
-      {
-        $group: {
-          _id: '$busId',
-          latestLocation: { $first: '$$ROOT' }
-        }
-      },
-      {
-        $lookup: {
-          from: 'buses',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'bus'
-        }
-      },
-      {
-        $unwind: '$bus'
-      },
-      {
-        $lookup: {
-          from: 'routes',
-          localField: 'bus.routeId',
-          foreignField: '_id',
-          as: 'route'
-        }
-      },
-      {
-        $unwind: { path: '$route', preserveNullAndEmptyArrays: true }
-      }
-    ];
-    
-    // Add filters if provided
-    if (routeId) {
-      pipeline.push({
-        $match: { 'bus.routeId': new mongoose.Types.ObjectId(routeId) }
+
+        // Calculate GPS-based estimated arrival
+        const estimation = calculateEstimatedArrival(
+          busLat, 
+          busLng, 
+          routeStop, 
+          locationSpeed || 50
+        );
+        
+        const estimatedTime = formatTimeToLocal(estimation.estimatedArrival);
+        
+        // Calculate delay
+        const scheduledTimestamp = new Date(stopArrival.estimatedArrival).getTime();
+        const estimatedTimestamp = estimation.estimatedArrival.getTime();
+        const delayMinutes = Math.round((estimatedTimestamp - scheduledTimestamp) / (1000 * 60));
+        
+        return {
+          stopName: stopArrival.stopName,
+          scheduledArrival: scheduledTime,
+          estimatedArrival: estimatedTime,
+          delayMinutes: delayMinutes,
+          delayStatus: delayMinutes > 5 ? 'delayed' : delayMinutes < -2 ? 'early' : 'on-time',
+          distanceFromCurrentLocation: `${estimation.distanceKm} km`,
+          estimatedTravelTime: `${estimation.timeMinutes} min`
+        };
       });
-    }
-    
-    if (status) {
-      pipeline.push({
-        $match: { 'latestLocation.status': status }
-      });
-    }
-    
-    pipeline.push({
-      $project: {
-        busId: '$bus._id',
-        busNumber: '$bus.busNumber',
-        registrationNumber: '$bus.registrationNumber',
-        route: {
-          id: '$route._id',
-          routeId: '$route.routeId',
-          name: '$route.name'
-        },
-        location: {
+
+    console.log('✅ Scheduled data:', {
+      date: scheduledDateInfo.date,
+      startTime: scheduledStartInfo.time,
+      endTime: scheduledEndInfo.time,
+      upcomingStops: upcomingStops.length
+    });
+
+    // ✅ CLEAN RESPONSE - NO GARBAGE FIELDS
+    res.json({
+      success: true,
+      date: currentDateTime.date,
+      time: currentDateTime.time,
+      data: {
+        // ✅ Current Location ONLY
+        currentLocation: {
           coordinates: {
-            latitude: { $arrayElemAt: ['$latestLocation.location.coordinates', 1] },
-            longitude: { $arrayElemAt: ['$latestLocation.location.coordinates', 0] }
+            latitude: busLat,
+            longitude: busLng
           },
-          speed: '$latestLocation.speed',
-          heading: '$latestLocation.heading',
-          address: '$latestLocation.address',
-          status: '$latestLocation.status',
-          timestamp: '$latestLocation.timestamp'
-        }
+          speed: `${Math.round(locationSpeed)} km/h`,
+          date: locationDateTime.date,
+          time: locationDateTime.time,
+          source: currentLocation ? 'gps' : 'route-start'
+        },
+        
+        // ✅ Trip Details ONLY
+        tripDetails: {
+          tripId: latestTrip.tripId,
+          busRegistrationNumber: latestTrip.registrationNumber,
+          routeId: latestTrip.routeId,
+          routeName: route.name,
+          status: latestTrip.status,
+          scheduledDate: scheduledDateInfo.date,
+          scheduledStartTime: scheduledStartInfo.time,
+          scheduledEndTime: scheduledEndInfo.time,
+          actualStartTime: latestTrip.actualStartTime ? formatTimeToLocal(latestTrip.actualStartTime) : null,
+          actualStartDate: latestTrip.actualStartTime ? formatDateTimeToLocal(latestTrip.actualStartTime).date : null,
+          actualEndTime: latestTrip.actualEndTime ? formatTimeToLocal(latestTrip.actualEndTime) : null,
+          actualEndDate: latestTrip.actualEndTime ? formatDateTimeToLocal(latestTrip.actualEndTime).date : null
+        },
+        
+        // ✅ Upcoming Stops ONLY (NO PASSED STOPS)
+        upcomingStops: upcomingStops
       }
     });
-    
-    const liveBuses = await Location.aggregate(pipeline);
-    
-    res.status(200).json({
-      success: true,
-      count: liveBuses.length,
-      timestamp: new Date(),
-      data: liveBuses
-    });
+
   } catch (error) {
+    console.error('❌ Location error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Error fetching live bus locations'
+      message: error.message
     });
   }
-});
+}
 
 /**
- * @desc    Create/Update bus location (GPS tracking)
- * @route   POST /api/locations
- * @access  Private (Driver, Admin, Operator)
- * ⭐ ESSENTIAL: Record GPS updates from buses
+ * @desc    Get location history for a specific trip
+ * @route   GET /api/locations/trip/:tripId/history
+ * @access  Public
  */
-const recordBusLocation = asyncHandler(async (req, res) => {
+async function getTripLocationHistory(req, res) {
+  try {
+    const tripIdParam = req.params.tripId;
+    const { limit = 100 } = req.query;
+
+    if (!tripIdParam) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trip ID is required'
+      });
+    }
+
+    const tripId = tripIdParam.toString().trim();
+
+    // Find trip
+    let trip;
+    if (tripId.length === 24 && /^[0-9a-fA-F]+$/.test(tripId)) {
+      trip = await Trip.findById(tripId);
+    } else {
+      trip = await Trip.findOne({ tripId: tripId });
+    }
+
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: `Trip not found: ${tripId}`
+      });
+    }
+
+    // Get locations
+    const locations = await Location.find({ tripId: trip._id })
+      .sort({ timestamp: 1 })
+      .limit(parseInt(limit));
+
+    if (locations.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No location history found for this trip'
+      });
+    }
+
+    // Format history
+    const history = locations.map((loc, index) => ({
+      index: index + 1,
+      timestamp: loc.timestamp,
+      coordinates: {
+        latitude: loc.location.coordinates[1],
+        longitude: loc.location.coordinates[0]
+      },
+      speed: Math.round(loc.speed || 0),
+      status: loc.status || 'moving'
+    }));
+
+    res.json({
+      success: true,
+      count: history.length,
+      tripDetails: {
+        tripId: trip.tripId,
+        registrationNumber: trip.registrationNumber,
+        status: trip.status
+      },
+      data: history
+    });
+
+  } catch (error) {
+    console.error('Location history error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
+
+/**
+ * @desc    Record a new GPS location
+ * @route   POST /api/locations
+ * @access  Protected
+ */
+async function recordLocation(req, res) {
   try {
     const {
-      busId,
+      registrationNumber,
+      tripId,
       latitude,
       longitude,
       speed = 0,
       heading = 0,
-      address,
-      status = 'moving'
+      status = 'moving',
+      source = 'gps'
     } = req.body;
-    
-    // Validate required fields
-    if (!busId || !latitude || !longitude) {
+
+    if (!registrationNumber || !tripId || !latitude || !longitude) {
       return res.status(400).json({
         success: false,
-        message: 'Bus ID, latitude, and longitude are required'
+        message: 'registrationNumber, tripId, latitude, and longitude are required'
       });
     }
-    
-    // Validate coordinates
-    if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-      return res.status(400).json({
+
+    const cleanTripId = tripId.toString().trim();
+
+    // Find trip
+    let trip;
+    if (cleanTripId.length === 24 && /^[0-9a-fA-F]+$/.test(cleanTripId)) {
+      trip = await Trip.findById(cleanTripId);
+    } else {
+      trip = await Trip.findOne({ tripId: cleanTripId });
+    }
+
+    if (!trip) {
+      return res.status(404).json({
         success: false,
-        message: 'Invalid coordinates'
+        message: `Trip not found: ${cleanTripId}`
       });
     }
-    
-    // Verify bus exists
-    const Bus = getBus();
-    const bus = await Bus.findById(busId);
-    if (!bus) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid bus ID'
-      });
-    }
-    
+
     // Create location record
-    const location = new Location({
-      busId,
+    const location = await Location.create({
+      registrationNumber: registrationNumber.toUpperCase(),
+      tripId: trip._id,
       location: {
         type: 'Point',
         coordinates: [parseFloat(longitude), parseFloat(latitude)]
       },
       speed: parseFloat(speed),
       heading: parseFloat(heading),
-      address,
       status,
-      source: 'gps',
-      timestamp: new Date()
+      timestamp: new Date(),
+      source
     });
-    
-    const savedLocation = await location.save();
-    
+
     res.status(201).json({
       success: true,
       message: 'Location recorded successfully',
       data: {
-        locationId: savedLocation._id,
-        busNumber: bus.busNumber,
+        locationId: location._id,
+        registrationNumber: location.registrationNumber,
+        timestamp: location.timestamp,
         coordinates: {
-          latitude: savedLocation.latitude,
-          longitude: savedLocation.longitude
-        },
-        speed: savedLocation.speed,
-        heading: savedLocation.heading,
-        status: savedLocation.status,
-        timestamp: savedLocation.timestamp
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude)
+        }
       }
     });
-  } catch (error) {
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation Error',
-        errors
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error recording location'
-    });
-  }
-});
 
-/**
- * @desc    Get bus route progress
- * @route   GET /api/locations/bus/:busId/route-progress
- * @access  Public
- * ⭐ USEFUL: Track bus progress along route
- */
-const getBusRouteProgress = asyncHandler(async (req, res) => {
-  try {
-    const Bus = getBus();
-    const bus = await Bus.findById(req.params.busId)
-      .populate('routeId', 'routeId name stops distance estimatedDuration');
-    
-    if (!bus || !bus.routeId) {
-      return res.status(404).json({
-        success: false,
-        message: 'Bus or route not found'
-      });
-    }
-    
-    // Get current location
-    const currentLocation = await Location.findOne({ busId: req.params.busId })
-      .sort({ timestamp: -1 });
-    
-    if (!currentLocation) {
-      return res.status(404).json({
-        success: false,
-        message: 'No location data found'
-      });
-    }
-    
-    // Get locations from last 2 hours to calculate progress
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const recentLocations = await Location.find({
-      busId: req.params.busId,
-      timestamp: { $gte: twoHoursAgo }
-    }).sort({ timestamp: 1 });
-    
-    // Calculate distance traveled
-    let distanceTraveled = 0;
-    for (let i = 1; i < recentLocations.length; i++) {
-      const prev = recentLocations[i - 1];
-      const curr = recentLocations[i];
-      
-      // Simple distance calculation (you can use more accurate formulas)
-      const lat1 = prev.latitude;
-      const lon1 = prev.longitude;
-      const lat2 = curr.latitude;
-      const lon2 = curr.longitude;
-      
-      const distance = Math.sqrt(
-        Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2)
-      ) * 111; // Rough conversion to km
-      
-      distanceTraveled += distance;
-    }
-    
-    res.status(200).json({
-      success: true,
-      bus: {
-        id: bus._id,
-        busNumber: bus.busNumber,
-        route: bus.routeId
-      },
-      progress: {
-        currentLocation: {
-          coordinates: {
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude
-          },
-          address: currentLocation.address,
-          timestamp: currentLocation.timestamp
-        },
-        distanceTraveled: Math.round(distanceTraveled * 100) / 100, // Round to 2 decimals
-        averageSpeed: recentLocations.length > 1 ? 
-          Math.round((distanceTraveled / 2) * 100) / 100 : 0, // km/h over 2 hours
-        totalStops: bus.routeId.stops?.length || 0,
-        routeDistance: bus.routeId.distance || 0
-      }
-    });
   } catch (error) {
+    console.error('Record location error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Error fetching route progress'
+      message: error.message
     });
   }
-});
+}
 
 module.exports = {
-  getAllLocations,
   getCurrentBusLocation,
-  getBusLocationHistory,
-  getLiveBusLocations,
-  recordBusLocation,
-  getBusRouteProgress
+  getTripLocationHistory,
+  recordLocation
 };

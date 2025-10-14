@@ -1,3 +1,4 @@
+// src/models/Route.js
 const mongoose = require('mongoose');
 
 const stopSchema = new mongoose.Schema({
@@ -9,13 +10,24 @@ const stopSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  coordinates: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      required: true
+    }
+  },
   estimatedArrivalOffset: {
     type: Number, // minutes from start
     required: true
   },
-  stopDuration: {
-    type: Number, // minutes
-    default: 5
+  distanceFromStart: {
+    type: Number, // km from route start
+    default: 0
   }
 }, { _id: false });
 
@@ -28,74 +40,25 @@ const routeSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'Route name is required'],
-    trim: true
+    required: [true, 'Route name is required']
   },
   origin: {
-    city: {
-      type: String,
-      required: true
-    },
-    terminal: {
-      type: String,
-      required: true
-    }
+    city: String,
+    terminal: String
   },
   destination: {
-    city: {
-      type: String,
-      required: true
-    },
-    terminal: {
-      type: String,
-      required: true
-    }
+    city: String,
+    terminal: String
   },
   distance: {
-    type: Number,
-    required: true,
-    min: [1, 'Distance must be at least 1 km']
-  },
-  estimatedDuration: {
-    type: Number, // minutes
-    required: true,
-    min: [10, 'Duration must be at least 10 minutes']
-  },
-  stops: [stopSchema],
-  fare: {
-    normal: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    semiExpress: Number,
-    express: Number,
-    luxury: Number
-  },
-  status: {
-    type: String,
-    enum: ['operational', 'suspended', 'delayed', 'under-maintenance'],
-    default: 'operational'
-  },
-  operatingHours: {
-    start: {
-      type: String, // "05:00"
-      default: "05:00"
-    },
-    end: {
-      type: String, // "22:00"
-      default: "22:00"
-    }
-  },
-  frequency: {
-    type: String, // e.g., "Every 30 minutes"
+    type: Number, // total km
     required: true
   },
-  category: {
-    type: String,
-    enum: ['inter-provincial', 'provincial', 'local'],
-    default: 'inter-provincial'
+  estimatedDuration: {
+    type: Number, // total minutes
+    required: true
   },
+  stops: [stopSchema],
   isActive: {
     type: Boolean,
     default: true
@@ -106,12 +69,6 @@ const routeSchema = new mongoose.Schema({
 
 // Indexes
 routeSchema.index({ routeId: 1 });
-routeSchema.index({ status: 1 });
-routeSchema.index({ 'origin.city': 1, 'destination.city': 1 });
-
-// Virtual for route direction
-routeSchema.virtual('direction').get(function() {
-  return `${this.origin.city} → ${this.destination.city}`;
-});
+routeSchema.index({ 'stops.coordinates': '2dsphere' });
 
 module.exports = mongoose.model('Route', routeSchema);

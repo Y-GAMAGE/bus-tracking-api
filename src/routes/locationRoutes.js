@@ -1,42 +1,46 @@
+// src/routes/locationRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
-  getAllLocations,
   getCurrentBusLocation,
-  getBusLocationHistory,
-  getLiveBusLocations,
-  recordBusLocation,
-  getBusRouteProgress
+  getTripLocationHistory,
+  recordLocation,
+  // getAllLocations,
+  // getLocationById,
+  // updateLocation,
+  // deleteLocation
 } = require('../controllers/locationController');
 
-const { protect, authorize } = require('../middleware/auth');
+// Middleware (if you have auth)
+// const { protect, authorize } = require('../middleware/auth');
 
 // ========================================
-// PUBLIC ROUTES (Real-time tracking)
+// PUBLIC ROUTES
 // ========================================
 
-// Get all location records (admin filtering)
-router.get('/', getAllLocations);
+// Get current location for a specific bus
+router.get('/bus/:busRegistrationNumber/current', getCurrentBusLocation);
 
-// ⭐ ESSENTIAL: Real-time bus locations for dashboard
-router.get('/live', getLiveBusLocations);
+// Get location history for a specific trip
+router.get('/trip/:tripId/history', getTripLocationHistory);
 
-// ⭐ ESSENTIAL: Current location of specific bus
-router.get('/bus/:busId/current', getCurrentBusLocation);
+// // Get all locations (with pagination)
+// router.get('/', getAllLocations);
 
-// ⭐ IMPORTANT: Location history for specific bus
-router.get('/bus/:busId/history', getBusLocationHistory);
-
-// ✅ USEFUL: Route progress tracking
-router.get('/bus/:busId/route-progress', getBusRouteProgress);
+// // Get specific location by ID
+// router.get('/:id', getLocationById);
 
 // ========================================
-// PROTECTED ROUTES
+// PROTECTED ROUTES (uncomment if using auth)
 // ========================================
 
-router.use(protect);
+// Record new GPS location
+router.post('/', recordLocation);
 
-// ⭐ ESSENTIAL: Record GPS location updates
-router.post('/', authorize('admin', 'operator', 'driver'), recordBusLocation);
+// // Update location
+// router.put('/:id', updateLocation);
+
+// // Delete location
+// router.delete('/:id', deleteLocation);
 
 module.exports = router;
