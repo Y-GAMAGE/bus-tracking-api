@@ -4,6 +4,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const connectDB = require('./config/database');
+const { swaggerSpec, swaggerUi } = require('./config/swagger');
+
 
 const app = express();
 
@@ -14,11 +16,17 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 
 // Request logging
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   next();
+});
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
 });
 
 // Basic route
@@ -84,6 +92,44 @@ app.use(notFound);
 app.use(errorHandler);
 
 // ========================================
+// SWAGGER DOCUMENTATION
+// ========================================
+
+// Swagger UI setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'NTC Bus Tracking API Documentation',
+  swaggerOptions: {
+    persistAuthorization: true,
+  }
+}));
+
+// Swagger JSON endpoint
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+// Basic route (update to include docs link)
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'NTC Bus Tracking API with GPS Simulation',
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    documentation: 'http://localhost:3000/api-docs', // ✅ Add this line
+    endpoints: {
+      auth: '/api/auth',
+      buses: '/api/buses',
+      routes: '/api/routes',
+      locations: '/api/locations',
+      trips: '/api/trips',
+      health: '/health'
+    }
+  });
+});
+
+// ========================================
 // START SERVER
 // ========================================
 
@@ -92,6 +138,8 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.log('========================================');
   console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`📖 API Documentation: http://localhost:${PORT}/api-docs`); // ✅ Add this line
+
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
   console.log('========================================');

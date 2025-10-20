@@ -1,4 +1,3 @@
-// src/controllers/gpsSimulator.js
 const Trip = require('../models/trip');
 const Route = require('../models/route');
 const Location = require('../models/location');
@@ -6,10 +5,9 @@ const Location = require('../models/location');
 class GPSSimulator {
   constructor(tripId) {
     this.tripId = tripId;
-    this.compressionRatio = 60; // 6 minutes for any route
-    this.simulationStartTime = new Date();
-    this.virtualStartTime = null;
-    this.currentVirtualTime = null;
+    this.simulationStartTime = new Date(); // Real time when simulation starts
+    this.scheduledStartTime = null; // Trip's scheduled start time
+    this.scheduledEndTime = null; // Trip's scheduled end time
     this.visitedStops = new Set();
     this.isRunning = false;
     this.intervalId = null;
@@ -18,38 +16,46 @@ class GPSSimulator {
   async startSimulation() {
     try {
       console.log('\n🚌 STARTING GPS SIMULATION');
-      console.log('⚡ Any route compressed to 6 minutes demo');
+      console.log('⚡ Using SCHEDULED trip times (not current time)');
       
       // Get trip and route data
-      const trip = await Trip.findOne({ tripId: this.tripId }).populate('routeId');
+      const trip = await Trip.findOne({ tripId: this.tripId });
       if (!trip) throw new Error('Trip not found');
 
+      const route = await Route.findOne({ routeId: trip.routeId });
+      if (!route) throw new Error('Route not found');
+
       this.trip = trip;
-      this.route = trip.routeId;
+      this.route = route;
       
-      // Set virtual timing
-      this.virtualStartTime = new Date(trip.scheduledStartTime);
-      this.currentVirtualTime = new Date(this.virtualStartTime);
+      // ✅ USE SCHEDULED TIMES FROM TRIP (not current time)
+      this.scheduledStartTime = new Date(trip.scheduledStartTime);
+      this.scheduledEndTime = new Date(trip.scheduledEndTime);
+      
+      const scheduledDurationMs = this.scheduledEndTime - this.scheduledStartTime;
+      const simulationDurationMs = 6 * 60 * 1000; // 6 minutes simulation
       
       console.log(`📅 Route: ${this.route.name}`);
-      console.log(`🚌 Bus: ${trip.busRegistrationNumber}`);
-      console.log(`⏰ Virtual start: ${this.virtualStartTime.toLocaleTimeString()}`);
+      console.log(`🚌 Bus: ${trip.registrationNumber}`);
+      console.log(`🕒 Scheduled Start: ${this.scheduledStartTime.toLocaleString()}`);
+      console.log(`🕒 Scheduled End: ${this.scheduledEndTime.toLocaleString()}`);
+      console.log(`⏱️  Scheduled Duration: ${Math.round(scheduledDurationMs / (1000 * 60))} minutes`);
       console.log(`🎯 ${this.route.stops.length} stops to visit\n`);
       
-      // Update trip status
+      // Update trip status with scheduled start time (not current time)
       await Trip.findOneAndUpdate(
         { tripId: this.tripId },
         { 
-          status: 'started', 
-          actualStartTime: new Date(),
+          status: 'in-progress', 
+          actualStartTime: this.scheduledStartTime, // ✅ Use scheduled time
           currentStop: this.route.stops[0]?.name 
         }
       );
 
       this.isRunning = true;
       
-      // Generate GPS every 10 seconds (6 min total / route stops)
-      const intervalMs = (6 * 60 * 1000) / (this.route.stops.length * 3); // Multiple points per stop
+      // Generate GPS points every 10 seconds
+      const intervalMs = 10 * 1000; // 10 seconds
       
       this.intervalId = setInterval(() => {
         this.generateGPSPoint();
@@ -58,7 +64,7 @@ class GPSSimulator {
       // Stop after 6 minutes
       setTimeout(() => {
         this.stopSimulation();
-      }, 6 * 60 * 1000);
+      }, simulationDurationMs);
       
     } catch (error) {
       console.error('GPS Simulation Error:', error);
@@ -69,24 +75,23 @@ class GPSSimulator {
     if (!this.isRunning) return;
 
     try {
-      // Advance virtual time
-      const totalDurationMs = this.trip.scheduledEndTime - this.virtualStartTime;
+      // Calculate progress (0 to 1) based on simulation time
       const elapsedRealMs = Date.now() - this.simulationStartTime;
-      const compressionFactor = totalDurationMs / (6 * 60 * 1000); // Compress to 6 minutes
+      const simulationProgress = Math.min(elapsedRealMs / (6 * 60 * 1000), 1);
       
-      this.currentVirtualTime = new Date(
-        this.virtualStartTime.getTime() + (elapsedRealMs * compressionFactor)
-      );
-
+      // ✅ Calculate VIRTUAL TIME based on scheduled trip duration
+      const scheduledDurationMs = this.scheduledEndTime - this.scheduledStartTime;
+      const virtualElapsedMs = simulationProgress * scheduledDurationMs;
+      const currentVirtualTime = new Date(this.scheduledStartTime.getTime() + virtualElapsedMs);
+      
       // Calculate position along route
-      const progress = elapsedRealMs / (6 * 60 * 1000); // 0 to 1
-      const position = this.calculatePositionAtProgress(progress);
+      const position = this.calculatePositionAtProgress(simulationProgress);
       
-      // Add realistic variations
+      // Add realistic time variations (±2 minutes)
       const timeVariation = this.calculateTimeVariation();
-      const actualVirtualTime = new Date(this.currentVirtualTime.getTime() + timeVariation);
+      const actualVirtualTime = new Date(currentVirtualTime.getTime() + timeVariation);
 
-      // Create GPS point
+      // Create GPS point with virtual scheduled time
       const gpsData = {
         registrationNumber: this.trip.registrationNumber,
         tripId: this.trip._id,
@@ -94,20 +99,20 @@ class GPSSimulator {
           type: 'Point',
           coordinates: [position.lng, position.lat]
         },
-        speed: this.calculateSpeed(progress),
+        speed: this.calculateSpeed(simulationProgress),
         heading: this.calculateHeading(position),
-        timestamp: actualVirtualTime,
-        status: progress >= 0.95 ? 'stopped' : 'moving',
+        timestamp: actualVirtualTime, // ✅ Virtual time based on schedule
+        status: simulationProgress >= 0.95 ? 'stopped' : 'moving',
         source: 'simulation'
       };
 
       // Save GPS point
       await Location.create(gpsData);
       
-      console.log(`📡 ${actualVirtualTime.toLocaleTimeString()} | GPS: [${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}] | Speed: ${gpsData.speed} km/h`);
+      console.log(`📡 Virtual Time: ${actualVirtualTime.toLocaleString()} | GPS: [${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}] | Speed: ${gpsData.speed} km/h | Progress: ${Math.round(simulationProgress * 100)}%`);
 
-      // Check stop arrivals
-      await this.checkStopArrival(position, actualVirtualTime, progress);
+      // Check stop arrivals with virtual time
+      await this.checkStopArrival(position, actualVirtualTime, simulationProgress);
 
     } catch (error) {
       console.error('GPS generation error:', error);
@@ -115,8 +120,7 @@ class GPSSimulator {
   }
 
   calculatePositionAtProgress(progress) {
-    // Interpolate position along route based on progress (0-1)
-    const stops = this.route.stops;
+    const stops = this.route.stops.sort((a, b) => a.sequence - b.sequence);
     const totalStops = stops.length;
     
     if (progress <= 0) {
@@ -134,7 +138,7 @@ class GPSSimulator {
       };
     }
 
-    // Find current segment
+    // ✅ Fixed interpolation between stops
     const segmentProgress = progress * (totalStops - 1);
     const currentStopIndex = Math.floor(segmentProgress);
     const nextStopIndex = Math.min(currentStopIndex + 1, totalStops - 1);
@@ -143,7 +147,6 @@ class GPSSimulator {
     const currentStop = stops[currentStopIndex];
     const nextStop = stops[nextStopIndex];
 
-    // Interpolate between current and next stop
     const lat = currentStop.coordinates.coordinates[1] + 
       (nextStop.coordinates.coordinates[1] - currentStop.coordinates.coordinates[1]) * segmentRatio;
     const lng = currentStop.coordinates.coordinates[0] + 
@@ -153,7 +156,7 @@ class GPSSimulator {
   }
 
   async checkStopArrival(position, virtualTime, progress) {
-    const stops = this.route.stops;
+    const stops = this.route.stops.sort((a, b) => a.sequence - b.sequence);
     
     for (let i = 0; i < stops.length; i++) {
       const stop = stops[i];
@@ -185,7 +188,7 @@ class GPSSimulator {
       
       if (!stopArrival) return;
 
-      const scheduledArrival = stopArrival.estimatedArrival;
+      const scheduledArrival = new Date(stopArrival.estimatedArrival);
       const actualArrival = new Date(actualVirtualTime);
       
       // Calculate delay in minutes
@@ -193,11 +196,11 @@ class GPSSimulator {
       const delayMinutes = Math.round(delayMs / (1000 * 60));
 
       console.log(`\n🚏 STOP ARRIVAL: ${stop.name}`);
-      console.log(`📅 Scheduled: ${scheduledArrival.toLocaleTimeString()}`);
-      console.log(`⏰ Actual: ${actualArrival.toLocaleTimeString()}`);
+      console.log(`📅 Scheduled: ${scheduledArrival.toLocaleString()}`);
+      console.log(`⏰ Actual: ${actualArrival.toLocaleString()}`);
       console.log(`📊 Delay: ${delayMinutes > 0 ? '+' : ''}${delayMinutes} minutes`);
       
-      // Update trip with stop arrival
+      // ✅ Update trip with delayMinutes field (not delay)
       await Trip.findOneAndUpdate(
         { 
           tripId: this.tripId,
@@ -206,7 +209,7 @@ class GPSSimulator {
         {
           $set: {
             'stopArrivals.$.actualArrival': actualArrival,
-            'stopArrivals.$.delay': delayMinutes,
+            'stopArrivals.$.delayMinutes': delayMinutes, // ✅ Use delayMinutes
             'stopArrivals.$.hasPassed': true,
             currentStop: stop.name
           }
@@ -268,25 +271,22 @@ class GPSSimulator {
   }
 
   calculateSpeed(progress) {
-    // Vary speed based on progress and add randomness
     const baseSpeed = 45;
-    const variation = (Math.random() - 0.5) * 20; // ±10 km/h
+    const variation = (Math.random() - 0.5) * 20;
     
     if (progress < 0.1 || progress > 0.9) {
-      return Math.max(0, Math.round((baseSpeed * 0.5) + variation)); // Slower at start/end
+      return Math.max(0, Math.round((baseSpeed * 0.5) + variation));
     }
     
     return Math.max(0, Math.round(baseSpeed + variation));
   }
 
   calculateHeading(position) {
-    // Simple heading calculation (can be enhanced)
     return Math.floor(Math.random() * 360);
   }
 
   calculateDistance(pos1, pos2) {
-    // Haversine formula for distance calculation
-    const R = 6371e3; // Earth radius in meters
+    const R = 6371e3;
     const φ1 = pos1.lat * Math.PI / 180;
     const φ2 = pos2.lat * Math.PI / 180;
     const Δφ = (pos2.lat - pos1.lat) * Math.PI / 180;
@@ -297,7 +297,7 @@ class GPSSimulator {
               Math.sin(Δλ/2) * Math.sin(Δλ/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-    return R * c; // Distance in meters
+    return R * c;
   }
 
   stopSimulation() {
@@ -309,15 +309,33 @@ class GPSSimulator {
     console.log('\n🏁 GPS SIMULATION COMPLETED!');
     console.log(`✅ Trip ${this.tripId} finished`);
     
-    // Update trip status
+    // ✅ Update trip status with scheduled end time
     Trip.findOneAndUpdate(
       { tripId: this.tripId },
       { 
         status: 'completed',
-        actualEndTime: new Date()
+        actualEndTime: this.scheduledEndTime // ✅ Use scheduled end time
       }
     ).exec();
   }
+}
+
+/**
+ * ✅ Helper function to format scheduled times properly
+ */
+function formatScheduledTime(dateString) {
+  const date = new Date(dateString);
+  // ✅ Use UTC methods to avoid timezone conversion
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  
+  return { 
+    date: `${year}-${month}-${day}`, 
+    time: `${hours}:${minutes}` 
+  };
 }
 
 /**
@@ -341,12 +359,27 @@ const startGPSSimulation = async (req, res) => {
     const simulator = new GPSSimulator(tripId);
     simulator.startSimulation();
 
+    // ✅ Format scheduled start time properly (not current time)
+    const scheduledStartInfo = formatScheduledTime(trip.scheduledStartTime);
+    const scheduledEndInfo = formatScheduledTime(trip.scheduledEndTime);
+
     res.json({
       success: true,
-      message: 'GPS simulation started',
-      tripId,
-      duration: '6 minutes',
-      note: 'Check console for live GPS updates'
+      message: 'GPS simulation started. Trip will complete in 6 minutes.',
+      data: {
+        tripId: trip.tripId,
+        duration: '6 minutes',
+        updateInterval: '10 seconds',
+        startedAt: {
+          date: scheduledStartInfo.date, // ✅ Shows scheduled date
+          time: scheduledStartInfo.time  // ✅ Shows scheduled time (e.g., "11:30")
+        },
+        scheduledEnd: {
+          date: scheduledEndInfo.date,
+          time: scheduledEndInfo.time
+        },
+        note: 'GPS data uses scheduled trip timing, not current real time'
+      }
     });
 
   } catch (error) {
