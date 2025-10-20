@@ -318,6 +318,8 @@ const startTrip = async (req, res) => {
   }
 };
 
+
+
 const simulateGPS = async (req, res) => {
   try {
     const { tripId } = req.params;
@@ -346,30 +348,29 @@ const simulateGPS = async (req, res) => {
       });
     }
 
-    const startTime = new Date();
-    await Trip.findByIdAndUpdate(trip._id, {
-      status: 'in-progress',
-      actualStartTime: startTime,
-      currentStop: trip.stopArrivals[0]?.stopName
-    });
+    // ✅ Import and use the updated GPS simulator
+    const { GPSSimulator } = require('./gpsSimulator');
+    const simulator = new GPSSimulator(tripId);
+    await simulator.startSimulation();
 
-    // Start GPS simulation
-    simulateGPSRoute(trip, route);
-
-    // ✅ Format response with separate date and time
-    const startDateTime = formatDateTimeToLocal(startTime);
+    // ✅ Format response with scheduled times
+    const scheduledStartInfo = formatDateTimeToLocal(trip.scheduledStartTime);
+    const scheduledEndInfo = formatDateTimeToLocal(trip.scheduledEndTime);
 
     res.json({
       success: true,
-      message: 'GPS simulation started. Trip will complete in 6 minutes.',
+      message: 'GPS simulation started using scheduled trip times',
       data: {
         tripId: trip.tripId,
-        duration: '6 minutes',
+        duration: '6 minutes (compressed)',
         updateInterval: '10 seconds',
-        startedAt: {
-          date: startDateTime.date,
-          time: startDateTime.time
-        }
+        scheduledTiming: {
+          startDate: scheduledStartInfo.date,
+          startTime: scheduledStartInfo.time,
+          endDate: scheduledEndInfo.date,
+          endTime: scheduledEndInfo.time
+        },
+        note: 'GPS timestamps use scheduled trip timing, not current real time'
       }
     });
   } catch (error) {
@@ -379,6 +380,8 @@ const simulateGPS = async (req, res) => {
     });
   }
 };
+
+
 
 const completeTrip = async (req, res) => {
   try {

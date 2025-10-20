@@ -31,57 +31,51 @@ function formatTimeToLocal(utcTimeString) {
 }
 
 /**
- * ✅ Convert datetime to separate date and time fields WITHOUT timezone conversion
+ * Find the closest stop to current GPS coordinates
  */
-function formatDateTimeToLocal(utcTimeString) {
-  const date = new Date(utcTimeString);
-  
-  const year = date.getUTCFullYear();
-  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = date.getUTCDate().toString().padStart(2, '0');
-  const hours = date.getUTCHours().toString().padStart(2, '0');
-  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-  
+function findClosestStop(currentLat, currentLng, stops) {
+  let closestStop = null;
+  let shortestDistance = Infinity;
+  let isExactMatch = false;
+  let closestStopIndex = -1;
+
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i];
+    const stopLat = stop.coordinates.coordinates[1];
+    const stopLng = stop.coordinates.coordinates[0];
+    
+    const distance = calculateDistance(
+      { lat: currentLat, lng: currentLng },
+      { lat: stopLat, lng: stopLng }
+    );
+
+    if (distance < shortestDistance) {
+      shortestDistance = distance;
+      closestStop = stop;
+      closestStopIndex = i;
+      // Consider exact match if within 200 meters (increased threshold)
+      isExactMatch = distance <= 200;
+    }
+  }
+
   return {
-    date: `${year}-${month}-${day}`,
-    time: `${hours}:${minutes}`
+    stop: closestStop,
+    distance: shortestDistance,
+    isExactMatch,
+    stopIndex: closestStopIndex
   };
 }
 
-/**
- * Calculate estimated arrival time based on current GPS position and distance
- */
-function calculateEstimatedArrival(currentLat, currentLng, stop, currentSpeed) {
-  const stopLat = stop.coordinates.coordinates[1];
-  const stopLng = stop.coordinates.coordinates[0];
-  
-  const distance = calculateDistance(
-    { lat: currentLat, lng: currentLng },
-    { lat: stopLat, lng: stopLng }
-  );
-  
-  const speedKmh = currentSpeed || 50;
-  const distanceKm = distance / 1000;
-  const timeHours = distanceKm / speedKmh;
-  const timeMinutes = Math.round(timeHours * 60);
-  
-  const estimatedArrival = new Date(Date.now() + (timeMinutes * 60 * 1000));
-  
-  return {
-    estimatedArrival,
-    timeMinutes,
-    distanceKm: Math.round(distanceKm * 10) / 10
-  };
-}
+// ...existing code...
 
 /**
- * @desc    Get current location for a specific bus (CLEAN VERSION - NO GARBAGE)
+ * @desc    Get current location for a specific bus - SIMPLIFIED VERSION
  * @route   GET /api/locations/bus/:busRegistrationNumber/current
  * @access  Public
  */
 async function getCurrentBusLocation(req, res) {
-  console.log('🚀 CLEAN LOCATION CONTROLLER - NO TRIPROGRESS GARBAGE!');
-  console.log('🔥 Getting trip data for bus:', req.params.busRegistrationNumber);
+  console.log('🚀 SIMPLIFIED LOCATION CONTROLLER');
+  console.log('🔥 Getting current location for bus:', req.params.busRegistrationNumber);
   
   try {
     const registrationNumber = req.params.busRegistrationNumber;
@@ -107,9 +101,23 @@ async function getCurrentBusLocation(req, res) {
       });
     }
 
+    // ✅ Check if trip is completed
+    if (latestTrip.status === 'completed') {
+      return res.json({
+        success: true,
+        data: {
+          tripId: latestTrip.tripId,
+          registrationNumber: latestTrip.registrationNumber,
+          status: 'completed',
+          message: 'Trip has been completed',
+          completedAt: latestTrip.actualEndTime || latestTrip.scheduledEndTime
+        }
+      });
+    }
+
     console.log('✅ Found trip:', latestTrip.tripId);
 
-    // ✅ Find the most recent location for this specific trip
+    // ✅ Find the most recent GPS location
     const currentLocation = await Location.findOne({ 
       registrationNumber: registrationNumber.toUpperCase(),
       tripId: latestTrip._id
@@ -130,120 +138,152 @@ async function getCurrentBusLocation(req, res) {
     }
 
     // ✅ Use GPS location or route start as fallback
-    let busLat, busLng, locationSpeed = 0, locationTimestamp;
+    let busLat, busLng, locationSpeed = 45, gpsTimestamp;
     
     if (!currentLocation) {
       // Use first stop as current location
       const firstStop = route.stops.sort((a, b) => a.sequence - b.sequence)[0];
       busLat = firstStop.coordinates.coordinates[1];
       busLng = firstStop.coordinates.coordinates[0];
-      locationTimestamp = new Date();
+      gpsTimestamp = new Date();
       console.log('⚠️ Using route start location');
     } else {
       busLat = currentLocation.location.coordinates[1];
       busLng = currentLocation.location.coordinates[0];
-      locationSpeed = currentLocation.speed || 0;
-      locationTimestamp = currentLocation.timestamp;
-      console.log('📍 Using GPS location');
+      locationSpeed = currentLocation.speed || 45;
+      gpsTimestamp = currentLocation.timestamp;
+      console.log('📍 Using GPS location from:', gpsTimestamp);
     }
 
-    const currentTime = new Date();
+    // ✅ Find closest stop to current position
+    const sortedStops = route.stops.sort((a, b) => a.sequence - b.sequence);
+    const closestStopInfo = findClosestStop(busLat, busLng, sortedStops);
+    
+    // ✅ Determine current location description
+    let currentLocationDescription;
+    if (closestStopInfo.isExactMatch) {
+      currentLocationDescription = `At ${closestStopInfo.stop.name}`;
+    } else {
+      const distanceKm = Math.round(closestStopInfo.distance / 100) / 10;
+      currentLocationDescription = `${distanceKm} km from ${closestStopInfo.stop.name}`;
+    }
 
-    // ✅ Format times
-    const scheduledDateInfo = formatDateTimeToLocal(latestTrip.scheduledDate);
-    const scheduledStartInfo = formatDateTimeToLocal(latestTrip.scheduledStartTime);
-    const scheduledEndInfo = formatDateTimeToLocal(latestTrip.scheduledEndTime);
-    const currentDateTime = formatDateTimeToLocal(currentTime);
-    const locationDateTime = formatDateTimeToLocal(locationTimestamp);
-
-    // ✅ Get upcoming stops (NO PASSED STOPS)
+    // ✅ Get ONLY upcoming stops (after current position)
+    const currentStopIndex = closestStopInfo.stopIndex;
+    
+    // ✅ Filter upcoming stops that haven't been passed
     const upcomingStops = latestTrip.stopArrivals
-      .filter(stopArrival => !stopArrival.hasPassed && !stopArrival.actualArrival)
+      .filter(stopArrival => {
+        // ✅ Check if stop has been marked as passed
+        if (stopArrival.hasPassed) {
+          return false;
+        }
+        
+        // Find this stop in the sorted route
+        const routeStopIndex = sortedStops.findIndex(s => s.name === stopArrival.stopName);
+        
+        // ✅ Only include stops that are ahead of current position
+        if (closestStopInfo.isExactMatch) {
+          return routeStopIndex > currentStopIndex;
+        } else {
+          return routeStopIndex >= currentStopIndex;
+        }
+      })
+      .sort((a, b) => {
+        // Sort by route sequence order
+        const stopA = sortedStops.find(s => s.name === a.stopName);
+        const stopB = sortedStops.find(s => s.name === b.stopName);
+        return (stopA?.sequence || 0) - (stopB?.sequence || 0);
+      })
       .map(stopArrival => {
-        const scheduledTime = formatTimeToLocal(stopArrival.estimatedArrival);
-        const routeStop = route.stops.find(s => s.name === stopArrival.stopName);
+        const routeStop = sortedStops.find(s => s.name === stopArrival.stopName);
         
         if (!routeStop) {
           return {
             stopName: stopArrival.stopName,
-            scheduledArrival: scheduledTime,
-            estimatedArrival: scheduledTime,
-            delayMinutes: 0,
-            delayStatus: 'on-time',
-            distanceFromCurrentLocation: 'N/A',
-            estimatedTravelTime: 'N/A'
+            scheduledArrival: formatTimeToLocal(stopArrival.estimatedArrival),
+            estimatedArrival: formatTimeToLocal(stopArrival.estimatedArrival),
+            status: 'on time'
           };
         }
 
-        // Calculate GPS-based estimated arrival
-        const estimation = calculateEstimatedArrival(
-          busLat, 
-          busLng, 
-          routeStop, 
-          locationSpeed || 50
+        // ✅ Calculate estimated arrival based on GPS timestamp + travel time
+        const stopLat = routeStop.coordinates.coordinates[1];
+        const stopLng = routeStop.coordinates.coordinates[0];
+        
+        const distance = calculateDistance(
+          { lat: busLat, lng: busLng },
+          { lat: stopLat, lng: stopLng }
         );
         
-        const estimatedTime = formatTimeToLocal(estimation.estimatedArrival);
+        const distanceKm = Math.round(distance / 100) / 10;
+        const timeMinutes = Math.round((distanceKm / locationSpeed) * 60);
         
-        // Calculate delay
-        const scheduledTimestamp = new Date(stopArrival.estimatedArrival).getTime();
-        const estimatedTimestamp = estimation.estimatedArrival.getTime();
-        const delayMinutes = Math.round((estimatedTimestamp - scheduledTimestamp) / (1000 * 60));
+        const estimatedArrivalTime = new Date(gpsTimestamp.getTime() + (timeMinutes * 60 * 1000));
+        
+        // ✅ Get scheduled arrival time
+        const scheduledArrivalTime = new Date(stopArrival.estimatedArrival);
+        
+        // ✅ Calculate delay in minutes (FIXED CALCULATION)
+        let delayMinutes;
+        if (stopArrival.actualArrival) {
+          // If bus already arrived at this stop, use actual time
+          const actualTime = new Date(stopArrival.actualArrival);
+          delayMinutes = Math.round((actualTime - scheduledArrivalTime) / (1000 * 60));
+        } else {
+          // Calculate delay based on estimated arrival
+          delayMinutes = Math.round((estimatedArrivalTime - scheduledArrivalTime) / (1000 * 60));
+        }
+        
+        // ✅ FIXED DELAY STATUS LOGIC
+        let status;
+        if (delayMinutes > 0) {
+          // Bus is late
+          status = `delayed by ${delayMinutes} minutes`;
+        } else if (delayMinutes < 0) {
+          // Bus is early
+          const earlyMinutes = Math.abs(delayMinutes);
+          status = `early by ${earlyMinutes} minutes`;
+        } else {
+          // Bus is exactly on time
+          status = 'on time';
+        }
         
         return {
           stopName: stopArrival.stopName,
-          scheduledArrival: scheduledTime,
-          estimatedArrival: estimatedTime,
-          delayMinutes: delayMinutes,
-          delayStatus: delayMinutes > 5 ? 'delayed' : delayMinutes < -2 ? 'early' : 'on-time',
-          distanceFromCurrentLocation: `${estimation.distanceKm} km`,
-          estimatedTravelTime: `${estimation.timeMinutes} min`
+          scheduledArrival: formatTimeToLocal(stopArrival.estimatedArrival),
+          estimatedArrival: formatTimeToLocal(estimatedArrivalTime),
+          status: status // ✅ SIMPLIFIED STATUS
         };
       });
 
-    console.log('✅ Scheduled data:', {
-      date: scheduledDateInfo.date,
-      startTime: scheduledStartInfo.time,
-      endTime: scheduledEndInfo.time,
-      upcomingStops: upcomingStops.length
-    });
+    console.log(`📍 Current location: ${currentLocationDescription}`);
+    console.log(`🎯 Found ${upcomingStops.length} upcoming stops`);
 
-    // ✅ CLEAN RESPONSE - NO GARBAGE FIELDS
+    // ✅ SIMPLIFIED RESPONSE
     res.json({
       success: true,
-      date: currentDateTime.date,
-      time: currentDateTime.time,
       data: {
-        // ✅ Current Location ONLY
+        // ✅ Basic Trip Info
+        tripId: latestTrip.tripId,
+        registrationNumber: latestTrip.registrationNumber,
+        
+        // ✅ Current Location Info
         currentLocation: {
-          coordinates: {
-            latitude: busLat,
-            longitude: busLng
-          },
-          speed: `${Math.round(locationSpeed)} km/h`,
-          date: locationDateTime.date,
-          time: locationDateTime.time,
-          source: currentLocation ? 'gps' : 'route-start'
+          description: currentLocationDescription,
+          speed: `${Math.round(locationSpeed)} km/h`
         },
         
-        // ✅ Trip Details ONLY
-        tripDetails: {
-          tripId: latestTrip.tripId,
-          busRegistrationNumber: latestTrip.registrationNumber,
+        // ✅ Upcoming Stops Only
+        upcomingStops: upcomingStops,
+        
+        // ✅ Route Info
+        routeInfo: {
           routeId: latestTrip.routeId,
           routeName: route.name,
-          status: latestTrip.status,
-          scheduledDate: scheduledDateInfo.date,
-          scheduledStartTime: scheduledStartInfo.time,
-          scheduledEndTime: scheduledEndInfo.time,
-          actualStartTime: latestTrip.actualStartTime ? formatTimeToLocal(latestTrip.actualStartTime) : null,
-          actualStartDate: latestTrip.actualStartTime ? formatDateTimeToLocal(latestTrip.actualStartTime).date : null,
-          actualEndTime: latestTrip.actualEndTime ? formatTimeToLocal(latestTrip.actualEndTime) : null,
-          actualEndDate: latestTrip.actualEndTime ? formatDateTimeToLocal(latestTrip.actualEndTime).date : null
-        },
-        
-        // ✅ Upcoming Stops ONLY (NO PASSED STOPS)
-        upcomingStops: upcomingStops
+          totalStops: route.stops.length,
+          remainingStops: upcomingStops.length
+        }
       }
     });
 
@@ -255,6 +295,7 @@ async function getCurrentBusLocation(req, res) {
     });
   }
 }
+
 
 /**
  * @desc    Get location history for a specific trip
