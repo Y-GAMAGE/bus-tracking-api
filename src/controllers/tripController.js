@@ -3,13 +3,10 @@ const Route = require('../models/route');
 const Location = require('../models/location');
 const Bus = require('../models/Bus');
 
-/**
- * ✅ Extract time from stored datetime WITHOUT timezone conversion
- */
+
 function formatTimeToLocal(utcTimeString) {
   const date = new Date(utcTimeString);
-  // ✅ Extract UTC hours and minutes directly (no timezone conversion)
-  const hours = date.getUTCHours().toString().padStart(2, '0');
+   const hours = date.getUTCHours().toString().padStart(2, '0');
   const minutes = date.getUTCMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 }
